@@ -4,11 +4,12 @@
 .PHONY: help install install-dev test test-cov lint format clean docker-build docker-start docker-stop docker-status docker-logs docker-run docker-shell docker-clean docker-web build build-auto up down web
 
 # Variables
-PYTHON := python3
-PIP := pip
-PYTEST := pytest
-BLACK := black
-RUFF := ruff
+# Surchargeable : make test PYTHON=.venv/bin/python
+PYTHON ?= python3
+PIP := $(PYTHON) -m pip
+PYTEST := $(PYTHON) -m pytest
+BLACK := $(PYTHON) -m black
+RUFF := $(PYTHON) -m ruff
 
 # Fichier compose par defaut (DEC-010) : seule l'interface tourne en conteneur,
 # Ollama reste natif sur l'hote. Il n'expose donc QU'UN service,

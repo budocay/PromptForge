@@ -49,9 +49,9 @@ all = [
 promptforge = "promptforge.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/budocay/PrompForge"
-Repository = "https://github.com/budocay/PrompForge"
-Issues = "https://github.com/budocay/PrompForge/issues"
+Homepage = "https://github.com/budocay/PromptForge"
+Repository = "https://github.com/budocay/PromptForge"
+Issues = "https://github.com/budocay/PromptForge/issues"
 
 [tool.setuptools.packages.find]
 include = ["promptforge*"]
@@ -73,4 +73,5 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 markers = [
     "integration: appelle un vrai service (Ollama, OSV.dev) ; ignore si absent",
+    "slow: test long (appels reels a un modele)",
 ]
