@@ -2,38 +2,37 @@
 Core de PromptForge - Logique principale de reformatage des prompts.
 """
 
-from pathlib import Path
-from datetime import datetime
-from typing import Optional
 import re
+from datetime import datetime
+from pathlib import Path
 
 from .database import Database, Project
+from .logging_config import get_logger
 from .providers import (
-    OllamaProvider,
     OllamaConfig,
     OllamaModelNotFoundError,
+    OllamaProvider,
     OllamaTimeoutError,
+    format_prompt_with_ollama,
     get_default_ollama_model,
     get_default_ollama_url,
-    format_prompt_with_ollama,
 )
 from .security import (
-    detect_dev_context,
-    detect_dependencies_from_text,
-    check_cve_osv,
-    get_security_guidelines,
     SecurityContext,
+    check_cve_osv,
+    detect_dependencies_from_text,
+    detect_dev_context,
+    get_security_guidelines,
 )
-from .logging_config import get_logger
 
 logger = get_logger(__name__)
 
 
 class PromptForge:
-    def __init__(self, base_path: Optional[str] = None):
+    def __init__(self, base_path: str | None = None):
         """
         Initialise PromptForge.
-        
+
         Args:
             base_path: Chemin de base pour la DB et l'historique.
                        Si None, utilise le répertoire courant.
@@ -42,60 +41,61 @@ class PromptForge:
         self.db_path = self.base_path / "promptforge.db"
         self.history_path = self.base_path / "history"
         self.projects_path = self.base_path / "projects"
-        
+
         # Création des dossiers si nécessaire
         self.history_path.mkdir(exist_ok=True)
         self.projects_path.mkdir(exist_ok=True)
-        
+
         # Initialisation
         self.db = Database(str(self.db_path))
         self.ollama = OllamaProvider()
-    
-    def configure_ollama(self, model: Optional[str] = None,
-                         base_url: Optional[str] = None) -> bool:
+
+    def configure_ollama(self, model: str | None = None, base_url: str | None = None) -> bool:
         """Configure le provider Ollama.
 
         Un argument omis reprend le defaut de l'environnement
         (``OLLAMA_MODEL``, ``OLLAMA_HOST``) au lieu d'une valeur figee :
         ``promptforge format --model x`` ne perd donc plus ``OLLAMA_HOST``.
         """
-        self.ollama = OllamaProvider(OllamaConfig(
-            base_url=base_url or get_default_ollama_url(),
-            model=model or get_default_ollama_model(),
-        ))
+        self.ollama = OllamaProvider(
+            OllamaConfig(
+                base_url=base_url or get_default_ollama_url(),
+                model=model or get_default_ollama_model(),
+            )
+        )
         return self.ollama.is_available()
 
     def init_project(self, name: str, config_path: str) -> tuple[bool, str]:
         """
         Initialise un nouveau projet à partir d'un fichier de configuration.
-        
+
         Args:
             name: Nom du projet
             config_path: Chemin vers le fichier .md de configuration
-        
+
         Returns:
             Tuple (succès, message)
         """
         config_file = Path(config_path)
-        
+
         if not config_file.exists():
             return False, f"Fichier de configuration introuvable: {config_path}"
-        
+
         if not config_file.suffix.lower() == ".md":
             return False, "Le fichier de configuration doit être un fichier .md"
-        
+
         try:
             config_content = config_file.read_text(encoding="utf-8")
         except Exception as e:
             return False, f"Erreur de lecture du fichier: {e}"
-        
+
         # Vérifier si le projet existe déjà
         existing = self.db.get_project(name)
         if existing:
             # Mise à jour du projet existant
             self.db.update_project(name, config_content)
             return True, f"Projet '{name}' mis à jour avec succès"
-        
+
         # Création du nouveau projet
         self.db.add_project(name, str(config_file.absolute()), config_content)
         return True, f"Projet '{name}' initialisé avec succès"
@@ -103,10 +103,10 @@ class PromptForge:
     def use_project(self, name: str) -> tuple[bool, str]:
         """
         Active un projet pour l'utiliser.
-        
+
         Args:
             name: Nom du projet à activer
-        
+
         Returns:
             Tuple (succès, message)
         """
@@ -114,7 +114,7 @@ class PromptForge:
             return True, f"Projet '{name}' activé"
         return False, f"Projet '{name}' introuvable"
 
-    def get_current_project(self) -> Optional[Project]:
+    def get_current_project(self) -> Project | None:
         """Retourne le projet actuellement actif."""
         return self.db.get_active_project()
 
@@ -131,11 +131,11 @@ class PromptForge:
     def format_prompt(
         self,
         raw_prompt: str,
-        project_name: Optional[str] = None,
-        profile_name: Optional[str] = None,
+        project_name: str | None = None,
+        profile_name: str | None = None,
         check_security: bool = True,
         check_cves: bool = False,
-    ) -> tuple[bool, str, Optional[str], Optional[SecurityContext]]:
+    ) -> tuple[bool, str, str | None, SecurityContext | None]:
         """
         Reformate un prompt en utilisant le contexte projet.
 
@@ -223,7 +223,7 @@ class PromptForge:
                 raw_prompt=raw_prompt,
                 project_context=project_context,
                 provider=self.ollama,
-                profile_name=profile_name
+                profile_name=profile_name,
             )
         except OllamaTimeoutError as exc:
             # Condition explicite, distincte d'un Ollama absent (traite plus
@@ -251,24 +251,28 @@ class PromptForge:
                 project_id=project.id,
                 raw_prompt=raw_prompt,
                 formatted_prompt=formatted,
-                file_path=str(file_path)
+                file_path=str(file_path),
             )
             return True, str(file_path), formatted, security_context
         else:
             # Sans projet, on retourne juste le résultat (pas d'historique)
-            return True, "Reformaté sans projet (historique non sauvegardé)", formatted, security_context
+            return (
+                True,
+                "Reformaté sans projet (historique non sauvegardé)",
+                formatted,
+                security_context,
+            )
 
-    def _save_history(self, project: Project, raw_prompt: str, 
-                      formatted_prompt: str) -> Path:
+    def _save_history(self, project: Project, raw_prompt: str, formatted_prompt: str) -> Path:
         """Sauvegarde le prompt dans un fichier d'historique."""
         timestamp = datetime.now().strftime("%Y-%m-%d_%Hh%M")
-        
+
         # Création d'un nom de fichier basé sur le prompt
         slug = self._slugify(raw_prompt[:50])
         filename = f"{timestamp}_{project.name}_{slug}.md"
-        
+
         file_path = self.history_path / filename
-        
+
         content = f"""# Prompt History - {datetime.now().strftime("%Y-%m-%d %H:%M")}
 
 ## Projet
@@ -296,20 +300,19 @@ class PromptForge:
 
 </details>
 """
-        
+
         file_path.write_text(content, encoding="utf-8")
         return file_path
 
     def _slugify(self, text: str) -> str:
         """Convertit un texte en slug pour nom de fichier."""
         # Supprime les caractères spéciaux
-        text = re.sub(r'[^\w\s-]', '', text.lower())
+        text = re.sub(r"[^\w\s-]", "", text.lower())
         # Remplace les espaces par des underscores
-        text = re.sub(r'[\s]+', '_', text)
-        return text[:30].strip('_')
+        text = re.sub(r"[\s]+", "_", text)
+        return text[:30].strip("_")
 
-    def get_history(self, project_name: Optional[str] = None, 
-                    limit: int = 20) -> list:
+    def get_history(self, project_name: str | None = None, limit: int = 20) -> list:
         """Récupère l'historique des prompts."""
         return self.db.get_history(project_name, limit)
 
@@ -318,7 +321,7 @@ class PromptForge:
         active_project = self.get_current_project()
         ollama_ok = self.ollama.is_available()
         models = self.ollama.list_models() if ollama_ok else []
-        
+
         return {
             "ollama_available": ollama_ok,
             "ollama_models": models,
@@ -326,7 +329,7 @@ class PromptForge:
             "active_project": active_project.name if active_project else None,
             "total_projects": len(self.list_projects()),
             "db_path": str(self.db_path),
-            "history_path": str(self.history_path)
+            "history_path": str(self.history_path),
         }
 
     def close(self):

@@ -3,11 +3,12 @@ Project helper functions for PromptForge web interface.
 Handles project CRUD operations for the UI.
 """
 
-import gradio as gr
 from pathlib import Path
 
-from .ollama_helpers import get_forge
+import gradio as gr
+
 from ..tokens import estimate_tokens
+from .ollama_helpers import get_forge
 
 # Constante partagée
 SANS_PROJET = "🔧 Sans projet (prompt seul)"
@@ -42,7 +43,7 @@ def get_project_config(project_name: str) -> str:
 
     content = project.config_content or ""
     char_count = len(content)
-    line_count = content.count('\n') + 1
+    line_count = content.count("\n") + 1
     word_count = len(content.split())
 
     # Estimation tokens précise
@@ -83,7 +84,8 @@ def select_project(project_name: str) -> tuple[str, str]:
         return "*Sélectionnez un projet ou 'Sans projet'*", ""
 
     if project_name == SANS_PROJET:
-        return """### 🔧 Mode Sans Projet
+        return (
+            """### 🔧 Mode Sans Projet
 
 **Utilisation:** Reformatage et recommandation basés uniquement sur votre prompt.
 
@@ -92,7 +94,9 @@ def select_project(project_name: str) -> tuple[str, str]:
 - ✅ Idéal pour tester des prompts génériques
 - ✅ Recommandations pures basées sur le contenu du prompt
 
-**Note:** L'historique n'est pas sauvegardé en mode sans projet.""", "ℹ️ Mode consultation (sans projet)"
+**Note:** L'historique n'est pas sauvegardé en mode sans projet.""",
+            "ℹ️ Mode consultation (sans projet)",
+        )
 
     forge = get_forge()
     success, msg = forge.use_project(project_name)
@@ -151,7 +155,7 @@ def upload_file(file, project_name: str):
             return (
                 f"✅ {msg}",
                 gr.update(choices=projects, value=normalized_name),
-                gr.update(choices=projects, value=normalized_name)
+                gr.update(choices=projects, value=normalized_name),
             )
         return f"❌ {msg}", gr.update(choices=projects), gr.update(choices=projects)
     except Exception as e:
@@ -197,7 +201,7 @@ def get_history_display(project_filter: str, limit: int = 10) -> str:
     output = []
     for h in history:
         date_str = h.created_at[:16].replace("T", " ")
-        preview = h.raw_prompt[:80].replace('\n', ' ')
+        preview = h.raw_prompt[:80].replace("\n", " ")
         if len(h.raw_prompt) > 80:
             preview += "..."
         output.append(f"**[{date_str}]** {preview}\n\n📁 `{Path(h.file_path).name}`\n\n---")

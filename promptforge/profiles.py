@@ -33,7 +33,6 @@ de D-071) :
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class TargetModel(Enum):
@@ -43,6 +42,7 @@ class TargetModel(Enum):
     2026-09-07. Un identifiant arrêté ou sans existence connue n'a pas sa place
     ici (F-028).
     """
+
     # Claude (Anthropic) - identifiants relevés le 2026-09-07
     CLAUDE_OPUS_5 = "claude-opus-5"
     CLAUDE_SONNET_5 = "claude-sonnet-5"
@@ -72,6 +72,7 @@ class TargetModel(Enum):
 
 class PromptStyle(Enum):
     """Style de prompt souhaité."""
+
     CONCIS = "concis"
     DETAILLE = "detaille"
     TECHNIQUE = "technique"
@@ -106,12 +107,13 @@ class ModelPricing:
     reviendrait à afficher une chaîne que l'éditeur ne publie pas ; on affiche
     donc le nom que l'éditeur publie, et l'identifiant reste intact (F-028).
     """
-    input_price: float      # $ par million de tokens en entrée
-    output_price: float     # $ par million de tokens en sortie
+
+    input_price: float  # $ par million de tokens en entrée
+    output_price: float  # $ par million de tokens en sortie
     context_window: int | None = None  # Fenêtre max ; None = non confirmée
     cached_input: float | None = None  # $ / MTok en cache hit ; None = non confirmé
-    source_url: str = ""    # Page officielle consultée
-    verified_on: str = ""   # Date de vérification, ISO 8601
+    source_url: str = ""  # Page officielle consultée
+    verified_on: str = ""  # Date de vérification, ISO 8601
     display_name: str = ""  # Nom commercial publié par l'éditeur
 
     def estimate_cost(self, input_tokens: int, output_tokens: int, cached_pct: float = 0) -> float:
@@ -133,12 +135,13 @@ class ModelPricing:
 @dataclass
 class ReformatProfile:
     """Profil de reformatage complet."""
+
     target_model: TargetModel
     style: PromptStyle
     include_examples: bool = False
     include_constraints: bool = True
     include_output_format: bool = True
-    pricing: Optional[ModelPricing] = None
+    pricing: ModelPricing | None = None
 
 
 # ============================================
@@ -196,7 +199,6 @@ MODEL_PRICING = {
         verified_on=PRICING_VERIFIED_ON,
         display_name="Claude Haiku 4.5",
     ),
-
     # GPT (OpenAI) - colonne « short context » (jusqu'à 272K tokens d'entrée)
     TargetModel.GPT_5_1: ModelPricing(
         input_price=1.25,
@@ -232,7 +234,6 @@ MODEL_PRICING = {
         verified_on=PRICING_VERIFIED_ON,
         display_name="GPT-5 Pro",
     ),
-
     # Gemini (Google) - palier jusqu'à 200K tokens d'entrée, celui du
     # reformatage de prompt
     TargetModel.GEMINI_3_1_PRO: ModelPricing(
@@ -749,24 +750,21 @@ STYLE_MODIFIERS = {
 - Réponses directes et courtes
 - Pas de détails superflus
 - Focus sur l'essentiel""",
-    
     PromptStyle.DETAILLE: """
 ## Style: DÉTAILLÉ
 - Explications complètes
 - Couvre tous les aspects
 - Inclut le raisonnement""",
-    
     PromptStyle.TECHNIQUE: """
 ## Style: TECHNIQUE
 - Terminologie précise
 - Détails d'implémentation
 - Best practices incluses""",
-    
     PromptStyle.CREATIF: """
 ## Style: CRÉATIF
 - Place à l'interprétation
 - Encourage l'originalité
-- Focus sur l'intention"""
+- Focus sur l'intention""",
 }
 
 
@@ -800,16 +798,14 @@ def get_style_modifier(style: PromptStyle) -> str:
 
 
 def build_reformat_prompt(
-    raw_prompt: str,
-    project_context: str,
-    profile: ReformatProfile
+    raw_prompt: str, project_context: str, profile: ReformatProfile
 ) -> tuple[str, str]:
     """Construit le prompt pour le reformatage - version simplifiée."""
     system_prompt = get_system_prompt(profile.target_model)
     style_modifier = get_style_modifier(profile.style)
     if style_modifier:
         system_prompt += "\n" + style_modifier
-    
+
     # User prompt SIMPLE et DIRECT
     if project_context.strip():
         user_prompt = f"""CONTEXTE PROJET:
@@ -824,7 +820,7 @@ Réécris cette demande en prompt structuré. Intègre les infos du contexte pro
 {raw_prompt}
 
 Réécris cette demande en prompt structuré."""
-    
+
     return system_prompt, user_prompt
 
 
@@ -838,61 +834,58 @@ PRESET_PROFILES = {
         target_model=TargetModel.CLAUDE_OPUS_5,
         style=PromptStyle.DETAILLE,
         include_examples=True,
-        pricing=MODEL_PRICING[TargetModel.CLAUDE_OPUS_5]
+        pricing=MODEL_PRICING[TargetModel.CLAUDE_OPUS_5],
     ),
     "claude_sonnet_5": ReformatProfile(
         target_model=TargetModel.CLAUDE_SONNET_5,
         style=PromptStyle.TECHNIQUE,
         include_examples=True,
-        pricing=MODEL_PRICING[TargetModel.CLAUDE_SONNET_5]
+        pricing=MODEL_PRICING[TargetModel.CLAUDE_SONNET_5],
     ),
     "claude_haiku_4.5": ReformatProfile(
         target_model=TargetModel.CLAUDE_HAIKU_4_5,
         style=PromptStyle.CONCIS,
         include_examples=False,
-        pricing=MODEL_PRICING[TargetModel.CLAUDE_HAIKU_4_5]
+        pricing=MODEL_PRICING[TargetModel.CLAUDE_HAIKU_4_5],
     ),
-
     # GPT (OpenAI)
     "gpt_5.1": ReformatProfile(
         target_model=TargetModel.GPT_5_1,
         style=PromptStyle.DETAILLE,
         include_examples=True,
-        pricing=MODEL_PRICING[TargetModel.GPT_5_1]
+        pricing=MODEL_PRICING[TargetModel.GPT_5_1],
     ),
     "gpt_5.6_terra": ReformatProfile(
         target_model=TargetModel.GPT_5_6_TERRA,
         style=PromptStyle.CONCIS,
         include_examples=False,
-        pricing=MODEL_PRICING[TargetModel.GPT_5_6_TERRA]
+        pricing=MODEL_PRICING[TargetModel.GPT_5_6_TERRA],
     ),
     "gpt_5_pro": ReformatProfile(
         target_model=TargetModel.GPT_5_PRO,
         style=PromptStyle.DETAILLE,
         include_examples=True,
-        pricing=MODEL_PRICING[TargetModel.GPT_5_PRO]
+        pricing=MODEL_PRICING[TargetModel.GPT_5_PRO],
     ),
-
     # Gemini (Google)
     "gemini_3.1_pro": ReformatProfile(
         target_model=TargetModel.GEMINI_3_1_PRO,
         style=PromptStyle.DETAILLE,
         include_examples=True,
-        pricing=MODEL_PRICING[TargetModel.GEMINI_3_1_PRO]
+        pricing=MODEL_PRICING[TargetModel.GEMINI_3_1_PRO],
     ),
     "gemini_3.6_flash": ReformatProfile(
         target_model=TargetModel.GEMINI_3_6_FLASH,
         style=PromptStyle.CONCIS,
         include_examples=False,
-        pricing=MODEL_PRICING[TargetModel.GEMINI_3_6_FLASH]
+        pricing=MODEL_PRICING[TargetModel.GEMINI_3_6_FLASH],
     ),
-
     # Universel - aucun modèle réel visé, donc aucun tarif (DEC-004 §1)
     "universel": ReformatProfile(
         target_model=TargetModel.UNIVERSAL,
         style=PromptStyle.DETAILLE,
         include_examples=True,
-        pricing=None
+        pricing=None,
     ),
 }
 
@@ -911,6 +904,7 @@ def list_profiles() -> list[str]:
 # Comparaison des modèles
 # ============================================
 
+
 def compare_models(input_tokens: int = 1000, output_tokens: int = 500) -> list[dict]:
     """Compare les modèles cibles sur ce que leur éditeur publie.
 
@@ -928,23 +922,25 @@ def compare_models(input_tokens: int = 1000, output_tokens: int = 500) -> list[d
         cette fonction établit, et il est entièrement déterminé par les tarifs.
     """
     comparisons = []
-    
+
     for model, pricing in MODEL_PRICING.items():
         cost = pricing.estimate_cost(input_tokens, output_tokens)
-        comparisons.append({
-            # `model` reste l'identifiant d'API exact, celui qu'on copie dans
-            # du code. `label` est le nom commercial publié par l'éditeur,
-            # celui qu'on montre à un humain : un tableau de comparaison qui
-            # affiche `claude-haiku-4-5-20251001` ne se lit pas (F-028).
-            "model": model.value,
-            "label": pricing.display_name or model.value,
-            "cost": cost,
-            "cost_display": f"${cost:.4f}",
-            "input_price": f"${pricing.input_price}/M",
-            "output_price": f"${pricing.output_price}/M",
-            "context": _format_context(pricing.context_window),
-        })
-    
+        comparisons.append(
+            {
+                # `model` reste l'identifiant d'API exact, celui qu'on copie dans
+                # du code. `label` est le nom commercial publié par l'éditeur,
+                # celui qu'on montre à un humain : un tableau de comparaison qui
+                # affiche `claude-haiku-4-5-20251001` ne se lit pas (F-028).
+                "model": model.value,
+                "label": pricing.display_name or model.value,
+                "cost": cost,
+                "cost_display": f"${cost:.4f}",
+                "input_price": f"${pricing.input_price}/M",
+                "output_price": f"${pricing.output_price}/M",
+                "context": _format_context(pricing.context_window),
+            }
+        )
+
     return sorted(comparisons, key=lambda x: x["cost"])
 
 

@@ -4,10 +4,9 @@ Stocke les projets et l'historique des prompts.
 """
 
 import sqlite3
-from pathlib import Path
-from datetime import datetime
-from typing import Optional
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 
 
 @dataclass
@@ -33,7 +32,7 @@ class PromptHistory:
 class Database:
     def __init__(self, db_path: str = "promptforge.db"):
         self.db_path = Path(db_path)
-        self.conn: Optional[sqlite3.Connection] = None
+        self.conn: sqlite3.Connection | None = None
         self._init_db()
 
     def _init_db(self):
@@ -41,7 +40,7 @@ class Database:
         # check_same_thread=False permet l'utilisation depuis plusieurs threads (Gradio)
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
-        
+
         self.conn.executescript("""
             CREATE TABLE IF NOT EXISTS projects (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,7 +50,7 @@ class Database:
                 created_at TEXT NOT NULL,
                 is_active INTEGER DEFAULT 0
             );
-            
+
             CREATE TABLE IF NOT EXISTS prompt_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id INTEGER NOT NULL,
@@ -61,7 +60,7 @@ class Database:
                 file_path TEXT NOT NULL,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             );
-            
+
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -72,50 +71,45 @@ class Database:
     def add_project(self, name: str, config_path: str, config_content: str) -> Project:
         """Ajoute un nouveau projet."""
         created_at = datetime.now().isoformat()
-        
+
         cursor = self.conn.execute(
             """
             INSERT INTO projects (name, config_path, config_content, created_at, is_active)
             VALUES (?, ?, ?, ?, 0)
             """,
-            (name, config_path, config_content, created_at)
+            (name, config_path, config_content, created_at),
         )
         self.conn.commit()
-        
+
         return Project(
             id=cursor.lastrowid,
             name=name,
             config_path=config_path,
             config_content=config_content,
             created_at=created_at,
-            is_active=False
+            is_active=False,
         )
 
     def update_project(self, name: str, config_content: str) -> bool:
         """Met à jour le contenu de configuration d'un projet."""
         cursor = self.conn.execute(
-            "UPDATE projects SET config_content = ? WHERE name = ?",
-            (config_content, name)
+            "UPDATE projects SET config_content = ? WHERE name = ?", (config_content, name)
         )
         self.conn.commit()
         return cursor.rowcount > 0
 
-    def get_project(self, name: str) -> Optional[Project]:
+    def get_project(self, name: str) -> Project | None:
         """Récupère un projet par son nom."""
-        row = self.conn.execute(
-            "SELECT * FROM projects WHERE name = ?", (name,)
-        ).fetchone()
-        
+        row = self.conn.execute("SELECT * FROM projects WHERE name = ?", (name,)).fetchone()
+
         if row:
             return Project(**dict(row))
         return None
 
-    def get_active_project(self) -> Optional[Project]:
+    def get_active_project(self) -> Project | None:
         """Récupère le projet actuellement actif."""
-        row = self.conn.execute(
-            "SELECT * FROM projects WHERE is_active = 1"
-        ).fetchone()
-        
+        row = self.conn.execute("SELECT * FROM projects WHERE is_active = 1").fetchone()
+
         if row:
             return Project(**dict(row))
         return None
@@ -123,9 +117,7 @@ class Database:
     def set_active_project(self, name: str) -> bool:
         """Définit un projet comme actif (désactive les autres)."""
         self.conn.execute("UPDATE projects SET is_active = 0")
-        cursor = self.conn.execute(
-            "UPDATE projects SET is_active = 1 WHERE name = ?", (name,)
-        )
+        cursor = self.conn.execute("UPDATE projects SET is_active = 1 WHERE name = ?", (name,))
         self.conn.commit()
         return cursor.rowcount > 0
 
@@ -139,37 +131,37 @@ class Database:
         project = self.get_project(name)
         if not project:
             return False
-        
+
         self.conn.execute("DELETE FROM prompt_history WHERE project_id = ?", (project.id,))
         self.conn.execute("DELETE FROM projects WHERE id = ?", (project.id,))
         self.conn.commit()
         return True
 
-    def add_history(self, project_id: int, raw_prompt: str, 
-                    formatted_prompt: str, file_path: str) -> PromptHistory:
+    def add_history(
+        self, project_id: int, raw_prompt: str, formatted_prompt: str, file_path: str
+    ) -> PromptHistory:
         """Ajoute une entrée dans l'historique."""
         created_at = datetime.now().isoformat()
-        
+
         cursor = self.conn.execute(
             """
             INSERT INTO prompt_history (project_id, raw_prompt, formatted_prompt, created_at, file_path)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (project_id, raw_prompt, formatted_prompt, created_at, file_path)
+            (project_id, raw_prompt, formatted_prompt, created_at, file_path),
         )
         self.conn.commit()
-        
+
         return PromptHistory(
             id=cursor.lastrowid,
             project_id=project_id,
             raw_prompt=raw_prompt,
             formatted_prompt=formatted_prompt,
             created_at=created_at,
-            file_path=file_path
+            file_path=file_path,
         )
 
-    def get_history(self, project_name: Optional[str] = None, 
-                    limit: int = 20) -> list[PromptHistory]:
+    def get_history(self, project_name: str | None = None, limit: int = 20) -> list[PromptHistory]:
         """Récupère l'historique des prompts."""
         if project_name:
             project = self.get_project(project_name)
@@ -177,18 +169,17 @@ class Database:
                 return []
             rows = self.conn.execute(
                 """
-                SELECT * FROM prompt_history 
-                WHERE project_id = ? 
+                SELECT * FROM prompt_history
+                WHERE project_id = ?
                 ORDER BY created_at DESC LIMIT ?
                 """,
-                (project.id, limit)
+                (project.id, limit),
             ).fetchall()
         else:
             rows = self.conn.execute(
-                "SELECT * FROM prompt_history ORDER BY created_at DESC LIMIT ?",
-                (limit,)
+                "SELECT * FROM prompt_history ORDER BY created_at DESC LIMIT ?", (limit,)
             ).fetchall()
-        
+
         return [PromptHistory(**dict(row)) for row in rows]
 
     def close(self):

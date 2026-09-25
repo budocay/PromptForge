@@ -9,14 +9,11 @@ Usage:
     # Returns: {"name": "...", "config": "...", "description": "..."}
 """
 
-from typing import Optional
-
 # ============================================
 # 5 TEMPLATES MÉTIER PRÉ-REMPLIS
 # ============================================
 
 STARTER_TEMPLATES = {
-
     # ==========================================
     # SEO / RÉFÉRENCEMENT
     # ==========================================
@@ -62,9 +59,8 @@ Quand je demande de l'aide SEO:
 2. Privilégie les requêtes long-tail (3-5 mots)
 3. Suggère des structures d'articles optimisées
 4. Inclus des recommandations de maillage interne
-"""
+""",
     },
-
     # ==========================================
     # DÉVELOPPEUR BACKEND
     # ==========================================
@@ -110,9 +106,8 @@ Quand je demande de l'aide code:
 3. Propose des tests unitaires
 4. Gère les erreurs proprement (exceptions custom)
 5. Docstrings format Google
-"""
+""",
     },
-
     # ==========================================
     # MARKETING DIGITAL
     # ==========================================
@@ -159,9 +154,8 @@ Quand je demande de l'aide marketing:
 2. Propose des CTAs clairs
 3. Inclus des métriques de succès
 4. Suggère des variantes A/B
-"""
+""",
     },
-
     # ==========================================
     # PRODUCT MANAGER
     # ==========================================
@@ -207,9 +201,8 @@ Quand je demande de l'aide produit:
 3. Identifie les edge cases
 4. Propose des métriques de succès
 5. Estime la complexité (S/M/L/XL)
-"""
+""",
     },
-
     # ==========================================
     # GÉNÉRAL / POLYVALENT
     # ==========================================
@@ -251,9 +244,8 @@ Quand je te demande de l'aide:
 2. Propose des solutions concrètes
 3. Structure ta réponse clairement
 4. Donne des exemples pratiques
-"""
+""",
     },
-
     # ==========================================
     # DATA ANALYST (BONUS)
     # ==========================================
@@ -299,12 +291,12 @@ Quand je demande de l'aide data:
 3. Propose des visualisations adaptées
 4. Anticipe les edge cases (NULL, doublons)
 5. Suggère des améliorations de perf si besoin
-"""
+""",
     },
 }
 
 
-def get_template(key: str) -> Optional[dict]:
+def get_template(key: str) -> dict | None:
     """Retourne un template par sa clé."""
     return STARTER_TEMPLATES.get(key)
 
@@ -312,12 +304,7 @@ def get_template(key: str) -> Optional[dict]:
 def list_templates() -> list[dict]:
     """Retourne la liste des templates disponibles."""
     return [
-        {
-            "key": key,
-            "name": tpl["name"],
-            "icon": tpl["icon"],
-            "description": tpl["description"]
-        }
+        {"key": key, "name": tpl["name"], "icon": tpl["icon"], "description": tpl["description"]}
         for key, tpl in STARTER_TEMPLATES.items()
     ]
 
@@ -330,7 +317,4 @@ def get_template_config(key: str) -> str:
 
 def get_template_choices() -> list[tuple[str, str]]:
     """Retourne les choix pour un dropdown Gradio."""
-    return [
-        (f"{tpl['icon']} {tpl['name']}", key)
-        for key, tpl in STARTER_TEMPLATES.items()
-    ]
+    return [(f"{tpl['icon']} {tpl['name']}", key) for key, tpl in STARTER_TEMPLATES.items()]

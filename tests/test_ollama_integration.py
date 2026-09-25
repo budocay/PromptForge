@@ -7,12 +7,13 @@ They are skipped if Ollama is not available.
 Run with: pytest tests/test_ollama_integration.py -v
 """
 
-import pytest
 import os
 from pathlib import Path
 
+import pytest
+
 from promptforge.core import PromptForge
-from promptforge.providers import OllamaProvider, OllamaConfig
+from promptforge.providers import OllamaConfig, OllamaProvider
 from promptforge.security import SecurityContext
 
 
@@ -24,8 +25,7 @@ def ollama_available() -> bool:
 
 # Skip all tests in this module if Ollama is not available
 pytestmark = pytest.mark.skipif(
-    not ollama_available(),
-    reason="Ollama not available - start 'ollama serve' to run these tests"
+    not ollama_available(), reason="Ollama not available - start 'ollama serve' to run these tests"
 )
 
 
@@ -51,7 +51,8 @@ def sample_project_config(integration_temp_dir):
     """Create a sample project config file."""
     config_path = Path(integration_temp_dir) / "projects" / "test-project.md"
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text("""# Test Project
+    config_path.write_text(
+        """# Test Project
 
 ## Stack
 - Python 3.12
@@ -67,7 +68,9 @@ def sample_project_config(integration_temp_dir):
 - Clean architecture
 - Repository pattern
 - Dependency injection
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
     return str(config_path)
 
 
@@ -90,11 +93,12 @@ class TestRealOllamaConnection:
         """Test that configured model exists."""
         models = ollama_provider.list_models()
         # The model might have a tag suffix, so check base name
-        model_base = ollama_provider.config.model.split(':')[0]
-        model_names = [m.split(':')[0] for m in models]
+        model_base = ollama_provider.config.model.split(":")[0]
+        model_names = [m.split(":")[0] for m in models]
         # Check if configured model or a variant exists
-        assert any(model_base in m for m in model_names), \
-            f"Model {ollama_provider.config.model} not found in {models}"
+        assert any(
+            model_base in m for m in model_names
+        ), f"Model {ollama_provider.config.model} not found in {models}"
 
 
 class TestRealPromptGeneration:
@@ -108,7 +112,7 @@ class TestRealPromptGeneration:
             raw_prompt="Write a hello world function in Python",
             project_context="",
             provider=ollama_provider,
-            profile_name=None
+            profile_name=None,
         )
 
         assert result is not None
@@ -128,7 +132,7 @@ class TestRealPromptGeneration:
             raw_prompt="Create an endpoint to list users",
             project_context=context,
             provider=ollama_provider,
-            profile_name=None
+            profile_name=None,
         )
 
         assert result is not None
@@ -143,7 +147,7 @@ class TestRealPromptGeneration:
             raw_prompt="Explain dependency injection",
             project_context="Python FastAPI project",
             provider=ollama_provider,
-            profile_name="claude_sonnet_5"
+            profile_name="claude_sonnet_5",
         )
 
         assert result is not None
@@ -160,7 +164,7 @@ class TestRealPromptGeneration:
             project_context="",
             provider=ollama_provider,
             profile_name=None,
-            return_conversion_info=True
+            return_conversion_info=True,
         )
 
         assert result is not None
@@ -306,8 +310,9 @@ class TestLogging:
 
     def test_logging_initialization(self):
         """Test that logging can be initialized."""
-        from promptforge.logging_config import init_logging, get_logger
         import logging
+
+        from promptforge.logging_config import get_logger, init_logging
 
         init_logging(level=logging.DEBUG)
         logger = get_logger("test")
@@ -319,9 +324,10 @@ class TestLogging:
 
     def test_structured_logging(self, tmp_path):
         """Test structured JSON logging to file."""
-        from promptforge.logging_config import init_logging, get_logger
-        import logging
         import json
+        import logging
+
+        from promptforge.logging_config import get_logger, init_logging
 
         log_file = tmp_path / "test.log"
         init_logging(level=logging.DEBUG, log_file=log_file, structured_file=True)
@@ -333,7 +339,7 @@ class TestLogging:
         assert log_file.exists()
         content = log_file.read_text()
         # Should be valid JSON
-        for line in content.strip().split('\n'):
+        for line in content.strip().split("\n"):
             if line:
                 data = json.loads(line)
                 assert "timestamp" in data
@@ -346,11 +352,7 @@ class TestWebModules:
 
     def test_analysis_module(self):
         """Test prompt analysis functions."""
-        from promptforge.web.analysis import (
-            analyze_prompt_quality,
-            detect_task_type,
-            detect_domain
-        )
+        from promptforge.web.analysis import analyze_prompt_quality, detect_domain, detect_task_type
 
         prompt = "Create a REST API endpoint to handle user authentication"
 
@@ -372,9 +374,9 @@ class TestWebModules:
     def test_recommendations_module(self):
         """Test recommendation generation."""
         from promptforge.web.recommendations import (
+            calculate_costs,
             generate_recommendation,
             get_comparison_table,
-            calculate_costs
         )
 
         # Test comparison table
@@ -390,7 +392,7 @@ class TestWebModules:
             formatted_prompt="Test prompt for code review",
             task_type="code",
             ollama_model=None,
-            domain_override="code"
+            domain_override="code",
         )
         assert "Recommandé" in rec or "recommandé" in rec
 
@@ -403,6 +405,7 @@ class TestPerformance:
     def test_formatting_speed(self, ollama_provider):
         """Measure formatting speed."""
         import time
+
         from promptforge.providers import format_prompt_with_ollama
 
         prompts = [
@@ -414,11 +417,8 @@ class TestPerformance:
         times = []
         for prompt in prompts:
             start = time.time()
-            result = format_prompt_with_ollama(
-                raw_prompt=prompt,
-                project_context="",
-                provider=ollama_provider,
-                profile_name=None
+            format_prompt_with_ollama(
+                raw_prompt=prompt, project_context="", provider=ollama_provider, profile_name=None
             )
             elapsed = time.time() - start
             times.append(elapsed)

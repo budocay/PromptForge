@@ -3,12 +3,12 @@ Structured logging configuration for PromptForge.
 Provides consistent, configurable logging across all modules.
 """
 
+import json
 import logging
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-import json
 
 
 class StructuredFormatter(logging.Formatter):
@@ -35,11 +35,28 @@ class StructuredFormatter(logging.Formatter):
         # Add extra fields if present
         for key, value in record.__dict__.items():
             if key not in (
-                "name", "msg", "args", "created", "filename", "funcName",
-                "levelname", "levelno", "lineno", "module", "msecs",
-                "pathname", "process", "processName", "relativeCreated",
-                "stack_info", "exc_info", "exc_text", "thread", "threadName",
-                "message", "asctime"
+                "name",
+                "msg",
+                "args",
+                "created",
+                "filename",
+                "funcName",
+                "levelname",
+                "levelno",
+                "lineno",
+                "module",
+                "msecs",
+                "pathname",
+                "process",
+                "processName",
+                "relativeCreated",
+                "stack_info",
+                "exc_info",
+                "exc_text",
+                "thread",
+                "threadName",
+                "message",
+                "asctime",
             ):
                 log_data[key] = value
 
@@ -52,10 +69,10 @@ class ColoredConsoleFormatter(logging.Formatter):
     """
 
     COLORS = {
-        "DEBUG": "\033[36m",     # Cyan
-        "INFO": "\033[32m",      # Green
-        "WARNING": "\033[33m",   # Yellow
-        "ERROR": "\033[31m",     # Red
+        "DEBUG": "\033[36m",  # Cyan
+        "INFO": "\033[32m",  # Green
+        "WARNING": "\033[33m",  # Yellow
+        "ERROR": "\033[31m",  # Red
         "CRITICAL": "\033[35m",  # Magenta
     }
     RESET = "\033[0m"
@@ -111,12 +128,7 @@ class PromptForgeLogger:
         console_handler.setFormatter(ColoredConsoleFormatter())
         self.root_logger.addHandler(console_handler)
 
-    def add_file_handler(
-        self,
-        log_path: Path,
-        level: int = logging.DEBUG,
-        structured: bool = True
-    ):
+    def add_file_handler(self, log_path: Path, level: int = logging.DEBUG, structured: bool = True):
         """
         Add file handler for persistent logging.
 
@@ -133,9 +145,9 @@ class PromptForgeLogger:
         if structured:
             file_handler.setFormatter(StructuredFormatter())
         else:
-            file_handler.setFormatter(logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            ))
+            file_handler.setFormatter(
+                logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            )
 
         self.root_logger.addHandler(file_handler)
 
@@ -165,13 +177,11 @@ class PromptForgeLogger:
 
 
 # Global singleton instance
-_logger_instance: Optional[PromptForgeLogger] = None
+_logger_instance: PromptForgeLogger | None = None
 
 
 def init_logging(
-    level: int = logging.INFO,
-    log_file: Optional[Path] = None,
-    structured_file: bool = True
+    level: int = logging.INFO, log_file: Path | None = None, structured_file: bool = True
 ) -> PromptForgeLogger:
     """
     Initialize the PromptForge logging system.

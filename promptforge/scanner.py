@@ -16,19 +16,14 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from .security import (
-    SecurityContext,
     CVEInfo,
     SecretFinding,
-    get_security_guidelines,
-    scan_directory_for_secrets,
+    SecurityContext,
     format_secret_alerts,
-    OWASP_TOP_10,
-    SECURITY_KEYWORDS,
+    scan_directory_for_secrets,
 )
-
 
 # =============================================================================
 # CONSTANTS
@@ -149,9 +144,7 @@ def normalize_version_constraint(raw: str | None) -> str | None:
         return cleaned
 
     lower_bounds = [
-        version
-        for operator, version in clauses
-        if operator not in _UPPER_OR_EXCLUDING_OPERATORS
+        version for operator, version in clauses if operator not in _UPPER_OR_EXCLUDING_OPERATORS
     ]
     if not lower_bounds:
         return None
@@ -375,12 +368,12 @@ FRAMEWORK_SIGNATURES = {
     },
     "Rocket": {
         "files": ["Cargo.toml"],
-        "pattern": r'rocket\s*=',
+        "pattern": r"rocket\s*=",
         "category": "backend",
     },
     "Axum": {
         "files": ["Cargo.toml"],
-        "pattern": r'axum\s*=',
+        "pattern": r"axum\s*=",
         "category": "backend",
     },
     # CSS/UI
@@ -619,7 +612,7 @@ class DetectedLanguage:
     extensions: list[str]
     file_count: int
     percentage: float
-    version: Optional[str] = None
+    version: str | None = None
 
 
 @dataclass
@@ -628,8 +621,8 @@ class DetectedFramework:
 
     name: str
     category: str
-    version: Optional[str] = None
-    config_file: Optional[str] = None
+    version: str | None = None
+    config_file: str | None = None
 
 
 @dataclass
@@ -638,17 +631,17 @@ class DetectedDatabase:
 
     name: str
     detected_from: str
-    orm: Optional[str] = None
+    orm: str | None = None
 
 
 @dataclass
 class CodeConventions:
     """Detected code conventions."""
 
-    formatter: Optional[str] = None
-    linter: Optional[str] = None
-    typechecker: Optional[str] = None
-    line_length: Optional[int] = None
+    formatter: str | None = None
+    linter: str | None = None
+    typechecker: str | None = None
+    line_length: int | None = None
     config_files: list[str] = field(default_factory=list)
 
 
@@ -656,10 +649,10 @@ class CodeConventions:
 class TestSetup:
     """Detected test configuration."""
 
-    framework: Optional[str] = None
-    category: Optional[str] = None
+    framework: str | None = None
+    category: str | None = None
     test_dirs: list[str] = field(default_factory=list)
-    config_file: Optional[str] = None
+    config_file: str | None = None
 
 
 @dataclass
@@ -669,14 +662,14 @@ class DockerSetup:
     has_dockerfile: bool = False
     has_compose: bool = False
     services: list[str] = field(default_factory=list)
-    compose_file: Optional[str] = None
+    compose_file: str | None = None
 
 
 @dataclass
 class CICDSetup:
     """Detected CI/CD configuration."""
 
-    provider: Optional[str] = None
+    provider: str | None = None
     config_files: list[str] = field(default_factory=list)
     workflows: list[str] = field(default_factory=list)
 
@@ -695,6 +688,7 @@ class ProjectStructure:
 @dataclass
 class KeyFile:
     """Important project file."""
+
     path: str
     category: str  # entry_point, config, main, api, etc.
     description: str = ""
@@ -703,6 +697,7 @@ class KeyFile:
 @dataclass
 class DevCommand:
     """Development command."""
+
     name: str
     command: str
     source: str  # Makefile, package.json, pyproject.toml
@@ -711,6 +706,7 @@ class DevCommand:
 @dataclass
 class EnvVariable:
     """Environment variable."""
+
     name: str
     example: str = ""
     required: bool = True
@@ -720,6 +716,7 @@ class EnvVariable:
 @dataclass
 class DetectedPackage:
     """Detected package dependency."""
+
     ecosystem: str  # PyPI, npm, crates.io
     name: str
     version: str  # Version effective (installed si dispo, sinon declared)
@@ -732,11 +729,12 @@ class DetectedPackage:
 @dataclass
 class SecurityAlert:
     """Security vulnerability alert."""
+
     cve_id: str
     package: str
     severity: str  # LOW, MEDIUM, HIGH, CRITICAL
     summary: str = ""
-    fixed_version: Optional[str] = None
+    fixed_version: str | None = None
     references: list[str] = field(default_factory=list)  # Links to advisories
 
 
@@ -747,13 +745,13 @@ class ScanResult:
     languages: list[DetectedLanguage] = field(default_factory=list)
     frameworks: list[DetectedFramework] = field(default_factory=list)
     databases: list[DetectedDatabase] = field(default_factory=list)
-    structure: Optional[ProjectStructure] = None
-    conventions: Optional[CodeConventions] = None
+    structure: ProjectStructure | None = None
+    conventions: CodeConventions | None = None
     tests: list[TestSetup] = field(default_factory=list)
-    docker: Optional[DockerSetup] = None
-    cicd: Optional[CICDSetup] = None
-    readme_description: Optional[str] = None
-    project_name_suggestion: Optional[str] = None
+    docker: DockerSetup | None = None
+    cicd: CICDSetup | None = None
+    readme_description: str | None = None
+    project_name_suggestion: str | None = None
     scan_duration_ms: int = 0
     files_scanned: int = 0
     errors: list[str] = field(default_factory=list)
@@ -782,7 +780,7 @@ class ProjectScanner:
         max_depth: int = 3,
         max_files: int = 10000,
         timeout_seconds: int = 30,
-        ignore_patterns: Optional[list[str]] = None,
+        ignore_patterns: list[str] | None = None,
     ):
         """
         Initialize the scanner.
@@ -799,7 +797,7 @@ class ProjectScanner:
         self.ignore_patterns = ignore_patterns or DEFAULT_IGNORE_PATTERNS
 
         self._files_scanned = 0
-        self._start_time: Optional[float] = None
+        self._start_time: float | None = None
         self._errors: list[str] = []
         self._file_cache: dict[str, str] = {}
 
@@ -874,7 +872,7 @@ class ProjectScanner:
             return False
         return True
 
-    def _safe_read_file(self, path: Path, max_size: int = 1024 * 1024) -> Optional[str]:
+    def _safe_read_file(self, path: Path, max_size: int = 1024 * 1024) -> str | None:
         """Read file safely with error handling."""
         str_path = str(path)
         if str_path in self._file_cache:
@@ -1002,7 +1000,7 @@ class ProjectScanner:
 
         return languages
 
-    def _detect_language_version(self, path: Path, language: str) -> Optional[str]:
+    def _detect_language_version(self, path: Path, language: str) -> str | None:
         """Try to detect language version from config files."""
         if language not in VERSION_FILES:
             return None
@@ -1033,9 +1031,7 @@ class ProjectScanner:
                 if file_path.exists():
                     if signature.get("pattern"):
                         content = self._safe_read_file(file_path)
-                        if content and re.search(
-                            signature["pattern"], content, re.IGNORECASE
-                        ):
+                        if content and re.search(signature["pattern"], content, re.IGNORECASE):
                             detected = True
                             config_file = filename
                             break
@@ -1207,9 +1203,7 @@ class ProjectScanner:
                         )
                         if needs_pattern:
                             content = self._safe_read_file(file_path)
-                            if content and re.search(
-                                signature["pattern"], content, re.IGNORECASE
-                            ):
+                            if content and re.search(signature["pattern"], content, re.IGNORECASE):
                                 detected = True
                                 config_file = filename
                         else:
@@ -1256,9 +1250,7 @@ class ProjectScanner:
                 content = self._safe_read_file(compose_path)
                 if content:
                     # Simple service extraction
-                    services_match = re.findall(
-                        r"^\s{2}(\w[\w-]*):\s*$", content, re.MULTILINE
-                    )
+                    services_match = re.findall(r"^\s{2}(\w[\w-]*):\s*$", content, re.MULTILINE)
                     if services_match:
                         docker.services = services_match
                 break
@@ -1299,7 +1291,7 @@ class ProjectScanner:
 
         return cicd
 
-    def _extract_description(self, path: Path) -> Optional[str]:
+    def _extract_description(self, path: Path) -> str | None:
         """Try to extract project description from README."""
         readme_files = ["README.md", "README.rst", "README.txt", "README"]
 
@@ -1400,9 +1392,9 @@ class ProjectScanner:
             content = self._safe_read_file(makefile)
             if content:
                 # Find targets (lines starting with name:)
-                for match in re.finditer(r'^([a-zA-Z_-]+):\s*(?:.*)?$', content, re.MULTILINE):
+                for match in re.finditer(r"^([a-zA-Z_-]+):\s*(?:.*)?$", content, re.MULTILINE):
                     target = match.group(1)
-                    if not target.startswith('.') and target not in ['all', 'clean', 'help']:
+                    if not target.startswith(".") and target not in ["all", "clean", "help"]:
                         commands.append(DevCommand(target, f"make {target}", "Makefile"))
 
         # package.json
@@ -1412,11 +1404,12 @@ class ProjectScanner:
             if content:
                 try:
                     import json
+
                     data = json.loads(content)
                     scripts = data.get("scripts", {})
                     for name, cmd in list(scripts.items())[:10]:
                         commands.append(DevCommand(name, f"npm run {name}", "package.json"))
-                except:
+                except (ValueError, AttributeError):
                     pass
 
         # pyproject.toml scripts
@@ -1433,7 +1426,7 @@ class ProjectScanner:
                     if in_scripts:
                         if line.startswith("["):
                             break
-                        match = re.match(r'(\w+)\s*=', line)
+                        match = re.match(r"(\w+)\s*=", line)
                         if match:
                             name = match.group(1)
                             commands.append(DevCommand(name, name, "pyproject.toml"))
@@ -1468,7 +1461,9 @@ class ProjectScanner:
                 content = self._safe_read_file(compose_path)
                 if content:
                     # Simple regex to find environment variables
-                    for match in re.finditer(r'^\s*-?\s*([A-Z][A-Z0-9_]+)(?:=|\s*:)', content, re.MULTILINE):
+                    for match in re.finditer(
+                        r"^\s*-?\s*([A-Z][A-Z0-9_]+)(?:=|\s*:)", content, re.MULTILINE
+                    ):
                         name = match.group(1)
                         if name not in seen and not name.startswith("COMPOSE"):
                             seen.add(name)
@@ -1484,6 +1479,7 @@ class ProjectScanner:
         installed = {}
         try:
             from importlib.metadata import distributions
+
             for dist in distributions():
                 name = dist.metadata.get("Name", "").lower()
                 version = dist.metadata.get("Version", "")
@@ -1512,6 +1508,7 @@ class ProjectScanner:
 
         try:
             import json
+
             data = json.loads(content)
 
             # package-lock.json v2/v3 format (packages field)
@@ -1609,6 +1606,7 @@ class ProjectScanner:
 
         try:
             import json
+
             data = json.loads(content)
 
             for pkg in data.get("packages", []):
@@ -1655,7 +1653,7 @@ class ProjectScanner:
                     in_specs = False
                     continue
                 # Match "    gem_name (version)"
-                match = re.match(r'^\s{4}([a-zA-Z0-9_-]+)\s+\(([0-9.]+)', line)
+                match = re.match(r"^\s{4}([a-zA-Z0-9_-]+)\s+\(([0-9.]+)", line)
                 if match:
                     name = match.group(1)
                     version = match.group(2)
@@ -1677,6 +1675,7 @@ class ProjectScanner:
             if content:
                 try:
                     import json
+
                     data = json.loads(content)
                     for framework, deps in data.get("dependencies", {}).items():
                         for name, info in deps.items():
@@ -1691,8 +1690,7 @@ class ProjectScanner:
             content = self._safe_read_file(csproj)
             if content:
                 for match in re.finditer(
-                    r'<PackageReference\s+Include="([^"]+)"\s+Version="([^"]+)"',
-                    content
+                    r'<PackageReference\s+Include="([^"]+)"\s+Version="([^"]+)"', content
                 ):
                     name = match.group(1)
                     version = match.group(2)
@@ -1731,7 +1729,7 @@ class ProjectScanner:
                     # Match implementation 'group:artifact:version'
                     for match in re.finditer(
                         r"(?:implementation|api|compile)\s*['\"]([^:]+):([^:]+):([^'\"]+)['\"]",
-                        content
+                        content,
                     ):
                         artifact = match.group(2)
                         version = match.group(3)
@@ -1756,9 +1754,7 @@ class ProjectScanner:
         # Simple regex parsing for <dependency> blocks
         # Match <artifactId>xxx</artifactId> followed by <version>yyy</version>
         for match in re.finditer(
-            r'<artifactId>([^<]+)</artifactId>\s*<version>([^<]+)</version>',
-            content,
-            re.DOTALL
+            r"<artifactId>([^<]+)</artifactId>\s*<version>([^<]+)</version>", content, re.DOTALL
         ):
             artifact = match.group(1).strip()
             version = match.group(2).strip()
@@ -1782,6 +1778,7 @@ class ProjectScanner:
             if content:
                 try:
                     import json
+
                     data = json.loads(content)
                     # Conan 2.x format: {"requires": ["pkg/version@...", ...]}
                     for req in data.get("requires", []):
@@ -1801,6 +1798,7 @@ class ProjectScanner:
             if content:
                 try:
                     import json
+
                     data = json.loads(content)
                     # Conan 1.x: graph_lock.nodes
                     nodes = data.get("graph_lock", {}).get("nodes", {})
@@ -1830,6 +1828,7 @@ class ProjectScanner:
             if content:
                 try:
                     import json
+
                     data = json.loads(content)
 
                     # Dependencies can be strings or objects
@@ -1893,6 +1892,7 @@ class ProjectScanner:
 
         try:
             import json
+
             data = json.loads(content)
 
             # Version 2 format (Swift 5.6+)
@@ -1935,9 +1935,7 @@ class ProjectScanner:
 
         # find_package(PackageName VERSION x.y.z)
         for match in re.finditer(
-            r'find_package\s*\(\s*(\w+)(?:\s+(\d+(?:\.\d+)*))?',
-            content,
-            re.IGNORECASE
+            r"find_package\s*\(\s*(\w+)(?:\s+(\d+(?:\.\d+)*))?", content, re.IGNORECASE
         ):
             name = match.group(1)
             version = match.group(2) or "detected"
@@ -1947,7 +1945,7 @@ class ProjectScanner:
         for match in re.finditer(
             r'FetchContent_Declare\s*\(\s*(\w+).*?GIT_TAG\s+["\']?v?(\d+\.\d+(?:\.\d+)?)["\']?',
             content,
-            re.IGNORECASE | re.DOTALL
+            re.IGNORECASE | re.DOTALL,
         ):
             name = match.group(1)
             version = match.group(2)
@@ -1965,7 +1963,9 @@ class ProjectScanner:
         # Get installed packages for version verification
         installed_packages = self._get_installed_packages()
 
-        def make_package(ecosystem: str, name: str, declared_version: str, source_file: str) -> DetectedPackage:
+        def make_package(
+            ecosystem: str, name: str, declared_version: str, source_file: str
+        ) -> DetectedPackage:
             """Helper to create package with installed version if available."""
             name_lower = name.lower()
             installed_version = installed_packages.get(name_lower, "")
@@ -1985,7 +1985,7 @@ class ProjectScanner:
                 source_file=source_file,
                 declared_version=declared_version,
                 installed_version=installed_version,
-                version_source=version_source
+                version_source=version_source,
             )
 
         # Python: requirements.txt
@@ -2000,14 +2000,13 @@ class ProjectScanner:
                         if not line or line.startswith("#") or line.startswith("-"):
                             continue
                         # Match package==version or package>=version
-                        match = re.match(r"^([a-zA-Z0-9_-]+)\s*[=><]+\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)", line)
+                        match = re.match(
+                            r"^([a-zA-Z0-9_-]+)\s*[=><]+\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)", line
+                        )
                         if match:
-                            packages.append(make_package(
-                                "PyPI",
-                                match.group(1),
-                                match.group(2),
-                                req_file
-                            ))
+                            packages.append(
+                                make_package("PyPI", match.group(1), match.group(2), req_file)
+                            )
 
         # Python: pyproject.toml
         # Only scan runtime dependencies, NOT build-system.requires
@@ -2020,26 +2019,28 @@ class ProjectScanner:
                 deps_sections = []
 
                 # Find dependencies = [...] after [project]
-                project_match = re.search(r'\[project\].*?(?=\n\[|$)', content, re.DOTALL)
+                project_match = re.search(r"\[project\].*?(?=\n\[|$)", content, re.DOTALL)
                 if project_match:
                     deps_sections.append(project_match.group(0))
 
                 # Find [project.optional-dependencies.*] sections
-                for match in re.finditer(r'\[project\.optional-dependencies[^\]]*\].*?(?=\n\[|$)', content, re.DOTALL):
+                for match in re.finditer(
+                    r"\[project\.optional-dependencies[^\]]*\].*?(?=\n\[|$)", content, re.DOTALL
+                ):
                     deps_sections.append(match.group(0))
 
                 # Parse dependencies from these sections only
-                deps_content = '\n'.join(deps_sections)
-                for match in re.finditer(r'"([a-zA-Z0-9_-]+)(?:\[[\w,]+\])?\s*[=><]+\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)"', deps_content):
+                deps_content = "\n".join(deps_sections)
+                for match in re.finditer(
+                    r'"([a-zA-Z0-9_-]+)(?:\[[\w,]+\])?\s*[=><]+\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)"',
+                    deps_content,
+                ):
                     pkg_name = match.group(1).lower()
                     # Skip build tools that might appear
-                    if pkg_name not in ['setuptools', 'wheel', 'pip', 'build']:
-                        packages.append(make_package(
-                            "PyPI",
-                            match.group(1),
-                            match.group(2),
-                            "pyproject.toml"
-                        ))
+                    if pkg_name not in ["setuptools", "wheel", "pip", "build"]:
+                        packages.append(
+                            make_package("PyPI", match.group(1), match.group(2), "pyproject.toml")
+                        )
 
         # Node.js: package.json with package-lock.json for installed versions
         npm_installed = self._parse_npm_lockfile(path)
@@ -2047,20 +2048,24 @@ class ProjectScanner:
         if package_json.exists():
             content = self._safe_read_file(package_json)
             if content:
-                for match in re.finditer(r'"([a-zA-Z0-9@/_-]+)"\s*:\s*"[\^~]?([0-9]+\.[0-9]+(?:\.[0-9]+)?)"', content):
+                for match in re.finditer(
+                    r'"([a-zA-Z0-9@/_-]+)"\s*:\s*"[\^~]?([0-9]+\.[0-9]+(?:\.[0-9]+)?)"', content
+                ):
                     pkg_name = match.group(1)
                     declared_version = match.group(2)
                     if not pkg_name.startswith("@types/"):
                         installed_version = npm_installed.get(pkg_name.lower(), "")
-                        packages.append(DetectedPackage(
-                            ecosystem="npm",
-                            name=pkg_name,
-                            version=installed_version or declared_version,
-                            source_file="package.json",
-                            declared_version=declared_version,
-                            installed_version=installed_version,
-                            version_source="installed" if installed_version else "declared"
-                        ))
+                        packages.append(
+                            DetectedPackage(
+                                ecosystem="npm",
+                                name=pkg_name,
+                                version=installed_version or declared_version,
+                                source_file="package.json",
+                                declared_version=declared_version,
+                                installed_version=installed_version,
+                                version_source="installed" if installed_version else "declared",
+                            )
+                        )
 
         # Rust: Cargo.toml with Cargo.lock for installed versions
         cargo_installed = self._parse_cargo_lockfile(path)
@@ -2069,20 +2074,26 @@ class ProjectScanner:
             content = self._safe_read_file(cargo_toml)
             if content and "[dependencies]" in content:
                 deps_section = content.split("[dependencies]")[1].split("[")[0]
-                for match in re.finditer(r'^([a-zA-Z0-9_-]+)\s*=\s*"([0-9]+\.[0-9]+(?:\.[0-9]+)?)"', deps_section, re.MULTILINE):
+                for match in re.finditer(
+                    r'^([a-zA-Z0-9_-]+)\s*=\s*"([0-9]+\.[0-9]+(?:\.[0-9]+)?)"',
+                    deps_section,
+                    re.MULTILINE,
+                ):
                     pkg = match.group(1)
                     declared_version = match.group(2)
                     if pkg not in ["version", "edition", "name"]:
                         installed_version = cargo_installed.get(pkg.lower(), "")
-                        packages.append(DetectedPackage(
-                            ecosystem="crates.io",
-                            name=pkg,
-                            version=installed_version or declared_version,
-                            source_file="Cargo.toml",
-                            declared_version=declared_version,
-                            installed_version=installed_version,
-                            version_source="installed" if installed_version else "declared"
-                        ))
+                        packages.append(
+                            DetectedPackage(
+                                ecosystem="crates.io",
+                                name=pkg,
+                                version=installed_version or declared_version,
+                                source_file="Cargo.toml",
+                                declared_version=declared_version,
+                                installed_version=installed_version,
+                                version_source="installed" if installed_version else "declared",
+                            )
+                        )
 
         # Go: go.mod with go.sum for installed versions
         go_installed = self._parse_go_sum(path)
@@ -2090,20 +2101,28 @@ class ProjectScanner:
         if go_mod.exists():
             content = self._safe_read_file(go_mod)
             if content:
-                for match in re.finditer(r'^\s*([a-zA-Z0-9._/-]+)\s+v([0-9]+\.[0-9]+(?:\.[0-9]+)?)', content, re.MULTILINE):
+                for match in re.finditer(
+                    r"^\s*([a-zA-Z0-9._/-]+)\s+v([0-9]+\.[0-9]+(?:\.[0-9]+)?)",
+                    content,
+                    re.MULTILINE,
+                ):
                     module = match.group(1)
                     declared_version = match.group(2)
                     name = module.split("/")[-1] if "/" in module else module
-                    installed_version = go_installed.get(name.lower(), "") or go_installed.get(module.lower(), "")
-                    packages.append(DetectedPackage(
-                        ecosystem="Go",
-                        name=name,
-                        version=installed_version or declared_version,
-                        source_file="go.mod",
-                        declared_version=declared_version,
-                        installed_version=installed_version,
-                        version_source="installed" if installed_version else "declared"
-                    ))
+                    installed_version = go_installed.get(name.lower(), "") or go_installed.get(
+                        module.lower(), ""
+                    )
+                    packages.append(
+                        DetectedPackage(
+                            ecosystem="Go",
+                            name=name,
+                            version=installed_version or declared_version,
+                            source_file="go.mod",
+                            declared_version=declared_version,
+                            installed_version=installed_version,
+                            version_source="installed" if installed_version else "declared",
+                        )
+                    )
 
         # PHP: composer.json with composer.lock for installed versions
         composer_installed = self._parse_composer_lockfile(path)
@@ -2113,24 +2132,33 @@ class ProjectScanner:
             if content:
                 try:
                     import json
+
                     data = json.loads(content)
                     for section in ["require", "require-dev"]:
                         for pkg_name, version_constraint in data.get(section, {}).items():
                             if pkg_name != "php" and not pkg_name.startswith("ext-"):
                                 # Extract version from constraint (e.g., "^8.0" -> "8.0")
-                                declared = re.search(r'([0-9]+\.[0-9]+(?:\.[0-9]+)?)', version_constraint)
+                                declared = re.search(
+                                    r"([0-9]+\.[0-9]+(?:\.[0-9]+)?)", version_constraint
+                                )
                                 declared_version = declared.group(1) if declared else ""
                                 installed_version = composer_installed.get(pkg_name.lower(), "")
-                                short_name = pkg_name.split("/")[-1] if "/" in pkg_name else pkg_name
-                                packages.append(DetectedPackage(
-                                    ecosystem="Packagist",
-                                    name=short_name,
-                                    version=installed_version or declared_version,
-                                    source_file="composer.json",
-                                    declared_version=declared_version,
-                                    installed_version=installed_version,
-                                    version_source="installed" if installed_version else "declared"
-                                ))
+                                short_name = (
+                                    pkg_name.split("/")[-1] if "/" in pkg_name else pkg_name
+                                )
+                                packages.append(
+                                    DetectedPackage(
+                                        ecosystem="Packagist",
+                                        name=short_name,
+                                        version=installed_version or declared_version,
+                                        source_file="composer.json",
+                                        declared_version=declared_version,
+                                        installed_version=installed_version,
+                                        version_source=(
+                                            "installed" if installed_version else "declared"
+                                        ),
+                                    )
+                                )
                 except Exception:
                     pass
 
@@ -2140,40 +2168,49 @@ class ProjectScanner:
         if gemfile.exists():
             content = self._safe_read_file(gemfile)
             if content:
-                for match in re.finditer(r"gem\s+['\"]([a-zA-Z0-9_-]+)['\"](?:\s*,\s*['\"]([~>=<\s0-9.]+)['\"])?", content):
+                for match in re.finditer(
+                    r"gem\s+['\"]([a-zA-Z0-9_-]+)['\"](?:\s*,\s*['\"]([~>=<\s0-9.]+)['\"])?",
+                    content,
+                ):
                     gem_name = match.group(1)
                     version_constraint = match.group(2) or ""
-                    declared = re.search(r'([0-9]+\.[0-9]+(?:\.[0-9]+)?)', version_constraint)
+                    declared = re.search(r"([0-9]+\.[0-9]+(?:\.[0-9]+)?)", version_constraint)
                     declared_version = declared.group(1) if declared else ""
                     installed_version = gem_installed.get(gem_name.lower(), "")
-                    packages.append(DetectedPackage(
-                        ecosystem="RubyGems",
-                        name=gem_name,
-                        version=installed_version or declared_version,
-                        source_file="Gemfile",
-                        declared_version=declared_version,
-                        installed_version=installed_version,
-                        version_source="installed" if installed_version else "declared"
-                    ))
+                    packages.append(
+                        DetectedPackage(
+                            ecosystem="RubyGems",
+                            name=gem_name,
+                            version=installed_version or declared_version,
+                            source_file="Gemfile",
+                            declared_version=declared_version,
+                            installed_version=installed_version,
+                            version_source="installed" if installed_version else "declared",
+                        )
+                    )
 
         # C#/.NET: *.csproj with packages.lock.json for installed versions
         nuget_installed = self._parse_nuget_lockfile(path)
         for csproj in path.glob("*.csproj"):
             content = self._safe_read_file(csproj)
             if content:
-                for match in re.finditer(r'<PackageReference\s+Include="([^"]+)"\s+Version="([^"]+)"', content):
+                for match in re.finditer(
+                    r'<PackageReference\s+Include="([^"]+)"\s+Version="([^"]+)"', content
+                ):
                     pkg_name = match.group(1)
                     declared_version = match.group(2)
                     installed_version = nuget_installed.get(pkg_name.lower(), "")
-                    packages.append(DetectedPackage(
-                        ecosystem="NuGet",
-                        name=pkg_name,
-                        version=installed_version or declared_version,
-                        source_file=csproj.name,
-                        declared_version=declared_version,
-                        installed_version=installed_version,
-                        version_source="installed" if installed_version else "declared"
-                    ))
+                    packages.append(
+                        DetectedPackage(
+                            ecosystem="NuGet",
+                            name=pkg_name,
+                            version=installed_version or declared_version,
+                            source_file=csproj.name,
+                            declared_version=declared_version,
+                            installed_version=installed_version,
+                            version_source="installed" if installed_version else "declared",
+                        )
+                    )
 
         # Java Maven: pom.xml
         maven_installed = self._parse_maven_lockfile(path)
@@ -2181,20 +2218,26 @@ class ProjectScanner:
         if pom_file.exists():
             content = self._safe_read_file(pom_file)
             if content:
-                for match in re.finditer(r'<dependency>.*?<artifactId>([^<]+)</artifactId>.*?<version>([^<]+)</version>.*?</dependency>', content, re.DOTALL):
+                for match in re.finditer(
+                    r"<dependency>.*?<artifactId>([^<]+)</artifactId>.*?<version>([^<]+)</version>.*?</dependency>",
+                    content,
+                    re.DOTALL,
+                ):
                     artifact = match.group(1).strip()
                     declared_version = match.group(2).strip()
                     if not declared_version.startswith("$"):
                         installed_version = maven_installed.get(artifact.lower(), "")
-                        packages.append(DetectedPackage(
-                            ecosystem="Maven",
-                            name=artifact,
-                            version=installed_version or declared_version,
-                            source_file="pom.xml",
-                            declared_version=declared_version,
-                            installed_version=installed_version,
-                            version_source="installed" if installed_version else "declared"
-                        ))
+                        packages.append(
+                            DetectedPackage(
+                                ecosystem="Maven",
+                                name=artifact,
+                                version=installed_version or declared_version,
+                                source_file="pom.xml",
+                                declared_version=declared_version,
+                                installed_version=installed_version,
+                                version_source="installed" if installed_version else "declared",
+                            )
+                        )
 
         # Java Gradle: build.gradle
         gradle_installed = self._parse_gradle_lockfile(path)
@@ -2203,19 +2246,24 @@ class ProjectScanner:
             if gradle_path.exists():
                 content = self._safe_read_file(gradle_path)
                 if content:
-                    for match in re.finditer(r"(?:implementation|api|compile)\s*['\"]([^:]+):([^:]+):([^'\"]+)['\"]", content):
+                    for match in re.finditer(
+                        r"(?:implementation|api|compile)\s*['\"]([^:]+):([^:]+):([^'\"]+)['\"]",
+                        content,
+                    ):
                         artifact = match.group(2)
                         declared_version = match.group(3)
                         installed_version = gradle_installed.get(artifact.lower(), "")
-                        packages.append(DetectedPackage(
-                            ecosystem="Maven",
-                            name=artifact,
-                            version=installed_version or declared_version,
-                            source_file=gradle_file,
-                            declared_version=declared_version,
-                            installed_version=installed_version,
-                            version_source="installed" if installed_version else "declared"
-                        ))
+                        packages.append(
+                            DetectedPackage(
+                                ecosystem="Maven",
+                                name=artifact,
+                                version=installed_version or declared_version,
+                                source_file=gradle_file,
+                                declared_version=declared_version,
+                                installed_version=installed_version,
+                                version_source="installed" if installed_version else "declared",
+                            )
+                        )
 
         # C/C++ Conan: conanfile.txt or conanfile.py
         conan_installed = self._parse_conan_lockfile(path)
@@ -2225,34 +2273,42 @@ class ProjectScanner:
                 content = self._safe_read_file(conan_path)
                 if content:
                     # conanfile.txt: package/version
-                    for match in re.finditer(r'^([a-zA-Z0-9_-]+)/(\d+\.\d+(?:\.\d+)?)', content, re.MULTILINE):
+                    for match in re.finditer(
+                        r"^([a-zA-Z0-9_-]+)/(\d+\.\d+(?:\.\d+)?)", content, re.MULTILINE
+                    ):
                         pkg_name = match.group(1)
                         declared_version = match.group(2)
                         installed_version = conan_installed.get(pkg_name.lower(), "")
-                        packages.append(DetectedPackage(
-                            ecosystem="Conan",
-                            name=pkg_name,
-                            version=installed_version or declared_version,
-                            source_file=conan_file,
-                            declared_version=declared_version,
-                            installed_version=installed_version,
-                            version_source="installed" if installed_version else "declared"
-                        ))
-                    # conanfile.py: requires = ["package/version"]
-                    for match in re.finditer(r'["\']([a-zA-Z0-9_-]+)/(\d+\.\d+(?:\.\d+)?)', content):
-                        pkg_name = match.group(1)
-                        declared_version = match.group(2)
-                        if pkg_name.lower() not in [p.name.lower() for p in packages]:
-                            installed_version = conan_installed.get(pkg_name.lower(), "")
-                            packages.append(DetectedPackage(
+                        packages.append(
+                            DetectedPackage(
                                 ecosystem="Conan",
                                 name=pkg_name,
                                 version=installed_version or declared_version,
                                 source_file=conan_file,
                                 declared_version=declared_version,
                                 installed_version=installed_version,
-                                version_source="installed" if installed_version else "declared"
-                            ))
+                                version_source="installed" if installed_version else "declared",
+                            )
+                        )
+                    # conanfile.py: requires = ["package/version"]
+                    for match in re.finditer(
+                        r'["\']([a-zA-Z0-9_-]+)/(\d+\.\d+(?:\.\d+)?)', content
+                    ):
+                        pkg_name = match.group(1)
+                        declared_version = match.group(2)
+                        if pkg_name.lower() not in [p.name.lower() for p in packages]:
+                            installed_version = conan_installed.get(pkg_name.lower(), "")
+                            packages.append(
+                                DetectedPackage(
+                                    ecosystem="Conan",
+                                    name=pkg_name,
+                                    version=installed_version or declared_version,
+                                    source_file=conan_file,
+                                    declared_version=declared_version,
+                                    installed_version=installed_version,
+                                    version_source="installed" if installed_version else "declared",
+                                )
+                            )
 
         # C/C++ vcpkg: vcpkg.json
         vcpkg_installed = self._parse_vcpkg_lockfile(path)
@@ -2262,6 +2318,7 @@ class ProjectScanner:
             if content:
                 try:
                     import json
+
                     data = json.loads(content)
                     for dep in data.get("dependencies", []):
                         if isinstance(dep, str):
@@ -2272,15 +2329,17 @@ class ProjectScanner:
                             declared_version = dep.get("version>=", dep.get("version", ""))
                         if pkg_name:
                             installed_version = vcpkg_installed.get(pkg_name.lower(), "")
-                            packages.append(DetectedPackage(
-                                ecosystem="vcpkg",
-                                name=pkg_name,
-                                version=installed_version or declared_version or "latest",
-                                source_file="vcpkg.json",
-                                declared_version=declared_version,
-                                installed_version=installed_version,
-                                version_source="installed" if installed_version else "declared"
-                            ))
+                            packages.append(
+                                DetectedPackage(
+                                    ecosystem="vcpkg",
+                                    name=pkg_name,
+                                    version=installed_version or declared_version or "latest",
+                                    source_file="vcpkg.json",
+                                    declared_version=declared_version,
+                                    installed_version=installed_version,
+                                    version_source="installed" if installed_version else "declared",
+                                )
+                            )
                 except Exception:
                     pass
 
@@ -2293,7 +2352,7 @@ class ProjectScanner:
                 # Match .package(url: "...", from: "version") or .exact("version")
                 for match in re.finditer(
                     r'\.package\s*\([^)]*url:\s*["\']https?://[^"\']*?/([^/"\']+)(?:\.git)?["\'][^)]*(?:from:|exact:)\s*["\'](\d+\.\d+(?:\.\d+)?)["\']',
-                    content
+                    content,
                 ):
                     # L'URL se termine par `.git` dans la quasi-totalite des
                     # Package.swift. Sans ce retrait, le nom vaut `Alamofire.git`
@@ -2305,15 +2364,17 @@ class ProjectScanner:
                         pkg_name = pkg_name[: -len(".git")]
                     declared_version = match.group(2)
                     installed_version = swift_installed.get(pkg_name.lower(), "")
-                    packages.append(DetectedPackage(
-                        ecosystem="SwiftPM",
-                        name=pkg_name,
-                        version=installed_version or declared_version,
-                        source_file="Package.swift",
-                        declared_version=declared_version,
-                        installed_version=installed_version,
-                        version_source="installed" if installed_version else "declared"
-                    ))
+                    packages.append(
+                        DetectedPackage(
+                            ecosystem="SwiftPM",
+                            name=pkg_name,
+                            version=installed_version or declared_version,
+                            source_file="Package.swift",
+                            declared_version=declared_version,
+                            installed_version=installed_version,
+                            version_source="installed" if installed_version else "declared",
+                        )
+                    )
 
         # CMake: CMakeLists.txt (for C/C++ projects using CMake)
         cmake_packages = self._parse_cmake_packages(path)
@@ -2322,15 +2383,17 @@ class ProjectScanner:
             for pkg_name, version in cmake_packages.items():
                 # Only add if not already detected via Conan/vcpkg
                 if pkg_name.lower() not in [p.name.lower() for p in packages]:
-                    packages.append(DetectedPackage(
-                        ecosystem="CMake",
-                        name=pkg_name,
-                        version=version,
-                        source_file="CMakeLists.txt",
-                        declared_version=version if version != "detected" else "",
-                        installed_version="",
-                        version_source="declared"
-                    ))
+                    packages.append(
+                        DetectedPackage(
+                            ecosystem="CMake",
+                            name=pkg_name,
+                            version=version,
+                            source_file="CMakeLists.txt",
+                            declared_version=version if version != "detected" else "",
+                            installed_version="",
+                            version_source="declared",
+                        )
+                    )
 
         return packages[:100]  # Increased limit for multi-language projects
 
@@ -2348,10 +2411,7 @@ class ProjectScanner:
 
         from .security import check_cve_osv_detailed
 
-        dependencies = [
-            (pkg.ecosystem, pkg.name, pkg.version)
-            for pkg in result.packages
-        ]
+        dependencies = [(pkg.ecosystem, pkg.name, pkg.version) for pkg in result.packages]
 
         outcome = check_cve_osv_detailed(dependencies)
 
@@ -2361,14 +2421,16 @@ class ProjectScanner:
 
         alerts = []
         for cve in outcome.cves:
-            alerts.append(SecurityAlert(
-                cve_id=cve.id,
-                package=cve.package,
-                severity=cve.severity,
-                summary=cve.summary[:150] if cve.summary else "",
-                fixed_version=cve.fixed_version,
-                references=cve.references[:3] if cve.references else []
-            ))
+            alerts.append(
+                SecurityAlert(
+                    cve_id=cve.id,
+                    package=cve.package,
+                    severity=cve.severity,
+                    summary=cve.summary[:150] if cve.summary else "",
+                    fixed_version=cve.fixed_version,
+                    references=cve.references[:3] if cve.references else [],
+                )
+            )
 
         return alerts
 
@@ -2475,7 +2537,7 @@ class ProjectScanner:
         self,
         result: ScanResult,
         project_name: str,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> str:
         """
         Generate a Markdown configuration file from scan results.
@@ -2557,7 +2619,9 @@ class ProjectScanner:
             if result.docker.has_dockerfile:
                 lines.append("- Docker: Oui")
             if result.docker.has_compose:
-                services_str = ", ".join(result.docker.services[:5]) if result.docker.services else ""
+                services_str = (
+                    ", ".join(result.docker.services[:5]) if result.docker.services else ""
+                )
                 lines.append(f"- Docker Compose: {result.docker.compose_file}")
                 if services_str:
                     lines.append(f"- Services: {services_str}")
@@ -2598,7 +2662,9 @@ class ProjectScanner:
             if result.conventions.line_length:
                 lines.append(f"- **Longueur de ligne**: {result.conventions.line_length}")
             if result.conventions.config_files:
-                lines.append(f"- **Fichiers de config**: {', '.join(result.conventions.config_files)}")
+                lines.append(
+                    f"- **Fichiers de config**: {', '.join(result.conventions.config_files)}"
+                )
             lines.append("")
 
         # Tests
@@ -2666,7 +2732,9 @@ class ProjectScanner:
                 "elevated": "🟠 **ÉLEVÉ** - Vigilance accrue recommandée",
                 "standard": "🟢 **STANDARD** - Bonnes pratiques à appliquer",
             }
-            lines.append(f"> Niveau de sécurité: {level_indicators.get(security_context.security_level, 'STANDARD')}")
+            lines.append(
+                f"> Niveau de sécurité: {level_indicators.get(security_context.security_level, 'STANDARD')}"
+            )
             lines.append("")
 
             # Language-specific guidelines
@@ -2676,25 +2744,36 @@ class ProjectScanner:
 
                 if "python" in security_context.languages:
                     lines.append("#### Python")
-                    lines.append("- Utiliser `secrets` au lieu de `random` pour tokens/mots de passe")
+                    lines.append(
+                        "- Utiliser `secrets` au lieu de `random` pour tokens/mots de passe"
+                    )
                     lines.append("- Requêtes SQL paramétrées (pas de f-string dans les queries)")
                     lines.append("- Valider les inputs avec Pydantic ou dataclasses")
                     lines.append("- `bcrypt` ou `argon2` pour le hashing de mots de passe")
-                    lines.append("- Éviter les fonctions d'évaluation dynamique avec données utilisateur")
+                    lines.append(
+                        "- Éviter les fonctions d'évaluation dynamique avec données utilisateur"
+                    )
                     lines.append("")
 
-                if "javascript" in security_context.languages or "typescript" in security_context.languages:
+                if (
+                    "javascript" in security_context.languages
+                    or "typescript" in security_context.languages
+                ):
                     lines.append("#### JavaScript/TypeScript")
                     lines.append("- Échapper les outputs HTML (prévention XSS)")
                     lines.append("- Requêtes paramétrées pour les bases de données")
-                    lines.append("- Valider les inputs côté serveur (ne jamais faire confiance au client)")
+                    lines.append(
+                        "- Valider les inputs côté serveur (ne jamais faire confiance au client)"
+                    )
                     lines.append("- Configurer CORS correctement")
                     lines.append("- Utiliser `helmet.js` pour les headers de sécurité")
                     lines.append("")
 
                 if "rust" in security_context.languages:
                     lines.append("#### Rust")
-                    lines.append("- Préférer les types sûrs (`Option`, `Result`) aux valeurs nulles")
+                    lines.append(
+                        "- Préférer les types sûrs (`Option`, `Result`) aux valeurs nulles"
+                    )
                     lines.append("- Utiliser `sqlx` avec requêtes paramétrées pour SQL")
                     lines.append("- `argon2` pour le hashing de mots de passe")
                     lines.append("- Éviter `unsafe` sauf si absolument nécessaire")
@@ -2718,7 +2797,9 @@ class ProjectScanner:
 
                 if "csharp" in security_context.languages:
                     lines.append("#### C# / .NET")
-                    lines.append("- Utiliser les requêtes paramétrées avec Entity Framework ou Dapper")
+                    lines.append(
+                        "- Utiliser les requêtes paramétrées avec Entity Framework ou Dapper"
+                    )
                     lines.append("- ASP.NET Core Identity pour l'authentification")
                     lines.append("- Anti-forgery tokens pour les formulaires")
                     lines.append("- Encoder les outputs HTML avec `HtmlEncoder`")
@@ -2734,7 +2815,9 @@ class ProjectScanner:
 
                 if "ruby" in security_context.languages:
                     lines.append("#### Ruby")
-                    lines.append("- ActiveRecord avec requêtes paramétrées (where avec placeholders)")
+                    lines.append(
+                        "- ActiveRecord avec requêtes paramétrées (where avec placeholders)"
+                    )
                     lines.append("- `has_secure_password` pour le hashing de mots de passe")
                     lines.append("- Strong Parameters dans Rails pour filtrer les inputs")
                     lines.append("- Protection CSRF activée par défaut dans Rails")
@@ -2763,18 +2846,28 @@ class ProjectScanner:
                 lines.append("### Recommandations Spécifiques")
                 lines.append("")
 
-                if any(k in security_context.security_keywords_found for k in ["auth", "login", "password", "jwt", "token", "credentials"]):
+                if any(
+                    k in security_context.security_keywords_found
+                    for k in ["auth", "login", "password", "jwt", "token", "credentials"]
+                ):
                     lines.append("#### 🔐 Authentification")
                     lines.append("- Implémenter rate limiting sur les endpoints d'auth")
                     lines.append("- HTTPS uniquement pour toutes les communications")
-                    lines.append("- JWT: expiration courte, refresh tokens, signature forte (RS256)")
+                    lines.append(
+                        "- JWT: expiration courte, refresh tokens, signature forte (RS256)"
+                    )
                     lines.append("- Stocker les mots de passe avec bcrypt/argon2 (jamais MD5/SHA1)")
                     lines.append("- Protection CSRF sur tous les formulaires")
                     lines.append("")
 
-                if any(k in security_context.security_keywords_found for k in ["sql", "database", "query"]):
+                if any(
+                    k in security_context.security_keywords_found
+                    for k in ["sql", "database", "query"]
+                ):
                     lines.append("#### 🗄️ Base de Données")
-                    lines.append("- **TOUJOURS** utiliser des requêtes paramétrées (prepared statements)")
+                    lines.append(
+                        "- **TOUJOURS** utiliser des requêtes paramétrées (prepared statements)"
+                    )
                     lines.append("- Principe du moindre privilège pour les accès DB")
                     lines.append("- Chiffrer les données sensibles au repos")
                     lines.append("- Valider et sanitizer les inputs avant insertion")
@@ -2788,7 +2881,10 @@ class ProjectScanner:
                     lines.append("- Éviter les path traversal (../../)")
                     lines.append("")
 
-                if any(k in security_context.security_keywords_found for k in ["api", "endpoint", "route"]):
+                if any(
+                    k in security_context.security_keywords_found
+                    for k in ["api", "endpoint", "route"]
+                ):
                     lines.append("#### 🌐 API Security")
                     lines.append("- Authentification sur tous les endpoints sensibles")
                     lines.append("- Rate limiting et throttling")
@@ -2822,8 +2918,7 @@ class ProjectScanner:
         from .security import CVE_CHECK_INCOMPLETE_PREFIX
 
         cve_check_warnings = [
-            error for error in result.errors
-            if error.startswith(CVE_CHECK_INCOMPLETE_PREFIX)
+            error for error in result.errors if error.startswith(CVE_CHECK_INCOMPLETE_PREFIX)
         ]
         if cve_check_warnings:
             lines.append("---")
@@ -2874,11 +2969,15 @@ class ProjectScanner:
                     if alert.summary:
                         lines.append(f"**Description:** {alert.summary}")
                     if alert.fixed_version:
-                        lines.append(f"")
-                        lines.append(f"**Remediation:** Mettre à jour vers `{alert.fixed_version}` ou version supérieure")
+                        lines.append("")
+                        lines.append(
+                            f"**Remediation:** Mettre à jour vers `{alert.fixed_version}` ou version supérieure"
+                        )
                     else:
-                        lines.append(f"")
-                        lines.append(f"**Remediation:** Vérifier si une version corrigée existe ou envisager une alternative")
+                        lines.append("")
+                        lines.append(
+                            "**Remediation:** Vérifier si une version corrigée existe ou envisager une alternative"
+                        )
                     if alert.references:
                         lines.append("")
                         lines.append("**Références:**")
@@ -2891,7 +2990,11 @@ class ProjectScanner:
                 lines.append("")
                 for alert in high[:5]:
                     cve_link = format_cve_link(alert.cve_id)
-                    fix_str = f" → Mettre à jour vers `{alert.fixed_version}`" if alert.fixed_version else ""
+                    fix_str = (
+                        f" → Mettre à jour vers `{alert.fixed_version}`"
+                        if alert.fixed_version
+                        else ""
+                    )
                     lines.append(f"- {cve_link}: `{alert.package}`{fix_str}")
                     if alert.references:
                         lines.append(f"  - Ref: {alert.references[0]}")
@@ -2982,7 +3085,7 @@ class ProjectScanner:
         lines.append("")
         lines.append("## Notes")
         lines.append("")
-        lines.append(f"- Configuration generee automatiquement par PromptForge Scanner")
+        lines.append("- Configuration generee automatiquement par PromptForge Scanner")
         lines.append(f"- Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
         lines.append(f"- Fichiers scannes: {result.files_scanned}")
         lines.append(f"- Duree du scan: {result.scan_duration_ms}ms")

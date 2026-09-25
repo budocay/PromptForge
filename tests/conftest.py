@@ -2,14 +2,15 @@
 Fixtures partagées pour les tests PromptForge.
 """
 
-import pytest
-import tempfile
 import os
+import tempfile
 from pathlib import Path
 
-from promptforge.database import Database
+import pytest
+
 from promptforge.core import PromptForge
-from promptforge.providers import OllamaProvider, OllamaConfig
+from promptforge.database import Database
+from promptforge.providers import OllamaConfig
 
 
 @pytest.fixture
@@ -106,20 +107,20 @@ Créer une route API pour la gestion des utilisateurs avec les opérations CRUD.
 
 class MockOllamaProvider:
     """Provider Ollama simulé pour les tests."""
-    
+
     def __init__(self, available: bool = True, response: str = "Mocked response"):
         self._available = available
         self._response = response
         self.config = OllamaConfig()
-    
+
     def is_available(self) -> bool:
         return self._available
-    
+
     def list_models(self) -> list[str]:
         if self._available:
             return ["llama3.1:latest", "mistral:latest"]
         return []
-    
+
     def generate(self, prompt: str, system_prompt: str = "") -> str:
         if not self._available:
             return None

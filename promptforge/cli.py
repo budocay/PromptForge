@@ -7,12 +7,11 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 from .core import PromptForge
 
 
-def get_forge(base_path: Optional[str] = None) -> PromptForge:
+def get_forge(base_path: str | None = None) -> PromptForge:
     """Crée une instance PromptForge avec le bon chemin de base.
 
     Priorité : ``--path``, puis ``PROMPTFORGE_DATA_PATH`` (même variable que
@@ -22,14 +21,14 @@ def get_forge(base_path: Optional[str] = None) -> PromptForge:
     base_path = base_path or os.environ.get("PROMPTFORGE_DATA_PATH")
     if base_path:
         return PromptForge(base_path)
-    
+
     # Cherche un fichier promptforge.db en remontant l'arborescence
     current = Path.cwd()
     while current != current.parent:
         if (current / "promptforge.db").exists():
             return PromptForge(str(current))
         current = current.parent
-    
+
     # Sinon, utilise le répertoire courant
     return PromptForge()
 
@@ -38,7 +37,7 @@ def cmd_init(args):
     """Initialise un nouveau projet."""
     forge = get_forge(args.path)
     success, message = forge.init_project(args.name, args.config)
-    
+
     if success:
         print(f"✓ {message}")
         # Active automatiquement si c'est le premier projet
@@ -48,7 +47,7 @@ def cmd_init(args):
     else:
         print(f"✗ {message}", file=sys.stderr)
         sys.exit(1)
-    
+
     forge.close()
 
 
@@ -56,13 +55,13 @@ def cmd_use(args):
     """Active un projet."""
     forge = get_forge(args.path)
     success, message = forge.use_project(args.name)
-    
+
     if success:
         print(f"✓ {message}")
     else:
         print(f"✗ {message}", file=sys.stderr)
         sys.exit(1)
-    
+
     forge.close()
 
 
@@ -70,7 +69,7 @@ def cmd_list(args):
     """Liste les projets disponibles."""
     forge = get_forge(args.path)
     projects = forge.list_projects()
-    
+
     if not projects:
         print("Aucun projet configuré.")
         print("Utilisez 'promptforge init <nom> --config <fichier.md>' pour en créer un.")
@@ -82,40 +81,40 @@ def cmd_list(args):
             print(f"      Config: {p.config_path}")
             print(f"      Créé: {p.created_at[:10]}")
             print()
-    
+
     forge.close()
 
 
 def cmd_delete(args):
     """Supprime un projet."""
     forge = get_forge(args.path)
-    
+
     if not args.force:
         confirm = input(f"Supprimer le projet '{args.name}' et son historique ? [y/N] ")
-        if confirm.lower() != 'y':
+        if confirm.lower() != "y":
             print("Annulé.")
             forge.close()
             return
-    
+
     success, message = forge.delete_project(args.name)
-    
+
     if success:
         print(f"✓ {message}")
     else:
         print(f"✗ {message}", file=sys.stderr)
         sys.exit(1)
-    
+
     forge.close()
 
 
 def cmd_format(args):
     """Reformate un prompt."""
     forge = get_forge(args.path)
-    
+
     # Configure le modèle si spécifié
     if args.model:
         forge.configure_ollama(model=args.model)
-    
+
     # Récupère le prompt
     if args.prompt:
         raw_prompt = args.prompt
@@ -132,15 +131,15 @@ def cmd_format(args):
             except EOFError:
                 break
         raw_prompt = "\n".join(lines)
-    
+
     if not raw_prompt.strip():
         print("✗ Prompt vide", file=sys.stderr)
         forge.close()
         sys.exit(1)
-    
+
     print("⏳ Reformatage en cours...\n")
 
-    check_cves = getattr(args, 'check_cves', False)
+    check_cves = getattr(args, "check_cves", False)
     success, message, formatted, security_ctx = forge.format_prompt(
         raw_prompt, args.project, check_cves=check_cves
     )
@@ -176,7 +175,7 @@ def cmd_format(args):
     else:
         print(f"✗ {message}", file=sys.stderr)
         sys.exit(1)
-    
+
     forge.close()
 
 
@@ -184,17 +183,17 @@ def cmd_history(args):
     """Affiche l'historique des prompts."""
     forge = get_forge(args.path)
     history = forge.get_history(args.project, args.limit)
-    
+
     if not history:
         print("Aucun historique.")
     else:
         print(f"Derniers prompts ({len(history)} résultats):\n")
         for h in history:
             print(f"  [{h.created_at[:16]}] {h.file_path}")
-            preview = h.raw_prompt[:60].replace('\n', ' ')
+            preview = h.raw_prompt[:60].replace("\n", " ")
             print(f"      → {preview}...")
             print()
-    
+
     forge.close()
 
 
@@ -202,53 +201,53 @@ def cmd_status(args):
     """Affiche le statut du système."""
     forge = get_forge(args.path)
     status = forge.check_status()
-    
+
     print("Status PromptForge\n")
-    
+
     # Ollama
     if status["ollama_available"]:
-        print(f"  ✓ Ollama: Disponible")
+        print("  ✓ Ollama: Disponible")
         print(f"      Modèle actif: {status['current_model']}")
         print(f"      Modèles installés: {', '.join(status['ollama_models'][:5])}")
     else:
-        print(f"  ✗ Ollama: Non disponible")
-        print(f"      Lancez 'ollama serve' pour démarrer")
-    
+        print("  ✗ Ollama: Non disponible")
+        print("      Lancez 'ollama serve' pour démarrer")
+
     print()
-    
+
     # Projet
     if status["active_project"]:
         print(f"  ✓ Projet actif: {status['active_project']}")
     else:
-        print(f"  ⚠ Aucun projet actif")
-    
+        print("  ⚠ Aucun projet actif")
+
     print(f"      Total projets: {status['total_projects']}")
-    
+
     print()
     print(f"  📁 DB: {status['db_path']}")
     print(f"  📁 History: {status['history_path']}")
-    
+
     forge.close()
 
 
 def cmd_reload(args):
     """Recharge la configuration d'un projet depuis son fichier."""
     forge = get_forge(args.path)
-    
+
     project = forge.db.get_project(args.name)
     if not project:
         print(f"✗ Projet '{args.name}' introuvable", file=sys.stderr)
         forge.close()
         sys.exit(1)
-    
+
     success, message = forge.init_project(args.name, project.config_path)
-    
+
     if success:
         print(f"✓ Configuration rechargée pour '{args.name}'")
     else:
         print(f"✗ {message}", file=sys.stderr)
         sys.exit(1)
-    
+
     forge.close()
 
 
@@ -260,15 +259,15 @@ def cmd_web(args):
         print("✗ Gradio n'est pas installé.", file=sys.stderr)
         print("  Installez-le avec: pip install promptforge[web]", file=sys.stderr)
         sys.exit(1)
-    
+
     base_path = args.path
     if base_path:
         print(f"📂 Données stockées dans: {base_path}")
-    
+
     print(f"🚀 Lancement de l'interface web sur http://{args.host}:{args.port}")
     if args.share:
         print("📡 Mode partage activé (lien public Gradio)")
-    
+
     launch_web(host=args.host, port=args.port, share=args.share, base_path=base_path)
 
 
@@ -344,7 +343,7 @@ def cmd_scan(args):
     print()
 
     if result.languages:
-        langs = ", ".join(f"{l.name} ({l.file_count})" for l in result.languages[:3])
+        langs = ", ".join(f"{lang.name} ({lang.file_count})" for lang in result.languages[:3])
         print(f"   Langages: {langs}")
 
     if result.frameworks:
@@ -363,7 +362,7 @@ def cmd_scan(args):
         print(f"   Formatter: {result.conventions.formatter}")
 
     if result.docker and result.docker.has_dockerfile:
-        print(f"   Docker: Oui")
+        print("   Docker: Oui")
 
     if result.cicd and result.cicd.provider:
         print(f"   CI/CD: {result.cicd.provider}")
@@ -371,11 +370,7 @@ def cmd_scan(args):
     print()
 
     # Générer la configuration
-    config_content = scanner.generate_config(
-        result,
-        args.name,
-        args.description
-    )
+    config_content = scanner.generate_config(result, args.name, args.description)
 
     # Mode dry-run : afficher sans sauvegarder
     if args.dry_run:
@@ -408,130 +403,114 @@ def cmd_scan(args):
         else:
             print(f"⚠ {message}")
     else:
-        print(f"ℹ Projet non enregistré (--no-register)")
+        print("ℹ Projet non enregistré (--no-register)")
 
     forge.close()
 
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="promptforge",
-        description="Reformateur intelligent de prompts avec contexte projet"
+        prog="promptforge", description="Reformateur intelligent de prompts avec contexte projet"
     )
-    parser.add_argument(
-        "--path", "-p",
-        help="Chemin vers le répertoire PromptForge",
-        default=None
-    )
-    
+    parser.add_argument("--path", "-p", help="Chemin vers le répertoire PromptForge", default=None)
+
     subparsers = parser.add_subparsers(dest="command", help="Commandes disponibles")
-    
+
     # init
     init_parser = subparsers.add_parser("init", help="Initialiser un nouveau projet")
     init_parser.add_argument("name", help="Nom du projet")
     init_parser.add_argument("--config", "-c", required=True, help="Fichier .md de configuration")
     init_parser.set_defaults(func=cmd_init)
-    
+
     # use
     use_parser = subparsers.add_parser("use", help="Activer un projet")
     use_parser.add_argument("name", help="Nom du projet à activer")
     use_parser.set_defaults(func=cmd_use)
-    
+
     # list
     list_parser = subparsers.add_parser("list", help="Lister les projets")
     list_parser.set_defaults(func=cmd_list)
-    
+
     # delete
     delete_parser = subparsers.add_parser("delete", help="Supprimer un projet")
     delete_parser.add_argument("name", help="Nom du projet à supprimer")
     delete_parser.add_argument("--force", "-f", action="store_true", help="Sans confirmation")
     delete_parser.set_defaults(func=cmd_delete)
-    
+
     # format (commande principale)
     format_parser = subparsers.add_parser("format", help="Reformater un prompt")
     format_parser.add_argument("prompt", nargs="?", help="Prompt à reformater (interactif si omis)")
     format_parser.add_argument("--project", help="Projet à utiliser (défaut: actif)")
     format_parser.add_argument("--model", "-m", help="Modèle Ollama à utiliser")
-    format_parser.add_argument("--copy", "-c", action="store_true", help="Copier dans le presse-papier")
-    format_parser.add_argument("--check-cves", action="store_true", help="Vérifier les CVE via OSV.dev")
+    format_parser.add_argument(
+        "--copy", "-c", action="store_true", help="Copier dans le presse-papier"
+    )
+    format_parser.add_argument(
+        "--check-cves", action="store_true", help="Vérifier les CVE via OSV.dev"
+    )
     format_parser.set_defaults(func=cmd_format)
-    
+
     # history
     history_parser = subparsers.add_parser("history", help="Voir l'historique")
     history_parser.add_argument("--project", help="Filtrer par projet")
     history_parser.add_argument("--limit", "-n", type=int, default=10, help="Nombre de résultats")
     history_parser.set_defaults(func=cmd_history)
-    
+
     # status
     status_parser = subparsers.add_parser("status", help="Statut du système")
     status_parser.set_defaults(func=cmd_status)
-    
+
     # reload
     reload_parser = subparsers.add_parser("reload", help="Recharger la config d'un projet")
     reload_parser.add_argument("name", help="Nom du projet")
     reload_parser.set_defaults(func=cmd_reload)
-    
+
     # web
     web_parser = subparsers.add_parser("web", help="Lancer l'interface web")
-    web_parser.add_argument("--host", default="127.0.0.1", help="Adresse d'écoute (défaut: 127.0.0.1)")
+    web_parser.add_argument(
+        "--host", default="127.0.0.1", help="Adresse d'écoute (défaut: 127.0.0.1)"
+    )
     web_parser.add_argument("--port", "-p", type=int, default=7860, help="Port (défaut: 7860)")
-    web_parser.add_argument("--share", "-s", action="store_true", help="Créer un lien public Gradio")
+    web_parser.add_argument(
+        "--share", "-s", action="store_true", help="Créer un lien public Gradio"
+    )
     web_parser.set_defaults(func=cmd_web)
-    
+
     # template
-    template_parser = subparsers.add_parser("template", help="Afficher le template de génération de config")
+    template_parser = subparsers.add_parser(
+        "template", help="Afficher le template de génération de config"
+    )
     template_parser.add_argument("--output", "-o", help="Sauvegarder dans un fichier")
     template_parser.set_defaults(func=cmd_template)
 
     # scan
     scan_parser = subparsers.add_parser(
-        "scan",
-        help="Scanner un répertoire et générer une config automatiquement"
+        "scan", help="Scanner un répertoire et générer une config automatiquement"
     )
     scan_parser.add_argument(
-        "scan_path",
-        nargs="?",
-        default=".",
-        help="Chemin du répertoire à scanner (défaut: .)"
+        "scan_path", nargs="?", default=".", help="Chemin du répertoire à scanner (défaut: .)"
+    )
+    scan_parser.add_argument("--name", "-n", required=True, help="Nom du projet (requis)")
+    scan_parser.add_argument(
+        "--description", "-d", help="Description du projet (sinon extraite du README)"
     )
     scan_parser.add_argument(
-        "--name", "-n",
-        required=True,
-        help="Nom du projet (requis)"
+        "--output", "-o", help="Fichier de sortie (défaut: data/projects/{name}.md)"
     )
+    scan_parser.add_argument("--depth", type=int, default=3, help="Profondeur du scan (défaut: 3)")
+    scan_parser.add_argument("--dry-run", action="store_true", help="Afficher sans sauvegarder")
     scan_parser.add_argument(
-        "--description", "-d",
-        help="Description du projet (sinon extraite du README)"
-    )
-    scan_parser.add_argument(
-        "--output", "-o",
-        help="Fichier de sortie (défaut: data/projects/{name}.md)"
-    )
-    scan_parser.add_argument(
-        "--depth",
-        type=int,
-        default=3,
-        help="Profondeur du scan (défaut: 3)"
-    )
-    scan_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Afficher sans sauvegarder"
-    )
-    scan_parser.add_argument(
-        "--no-register",
-        action="store_true",
-        help="Ne pas enregistrer comme projet PromptForge"
+        "--no-register", action="store_true", help="Ne pas enregistrer comme projet PromptForge"
     )
     scan_parser.set_defaults(func=cmd_scan)
 
     # Parsing
     args = parser.parse_args()
-    
+
     if args.command is None:
         parser.print_help()
         sys.exit(0)
-    
+
     args.func(args)
 
 

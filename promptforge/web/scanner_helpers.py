@@ -3,22 +3,22 @@ Scanner helper functions for PromptForge web interface.
 Handles project scanning and configuration generation from the UI.
 """
 
-import gradio as gr
-import tempfile
 import shutil
+import tempfile
 import zipfile
 from pathlib import Path
-from typing import Optional
+
+import gradio as gr
 
 from ..scanner import ProjectScanner, ScanResult
-from ..security import SecurityContext, get_security_guidelines, OWASP_TOP_10
+from ..security import OWASP_TOP_10
 from .ollama_helpers import get_forge
 from .project_helpers import get_projects_list, normalize_name
-
 
 # =============================================================================
 # FOLDER BROWSER (native dialog)
 # =============================================================================
+
 
 def browse_for_folder() -> str:
     """
@@ -31,12 +31,11 @@ def browse_for_folder() -> str:
         # Créer une fenêtre Tk cachée
         root = Tk()
         root.withdraw()  # Cache la fenêtre principale
-        root.attributes('-topmost', True)  # Met le dialogue au premier plan
+        root.attributes("-topmost", True)  # Met le dialogue au premier plan
 
         # Ouvrir le dialogue de sélection de dossier
         folder_path = filedialog.askdirectory(
-            title="Sélectionne le dossier de ton projet",
-            initialdir=get_default_scan_path()
+            title="Sélectionne le dossier de ton projet", initialdir=get_default_scan_path()
         )
 
         root.destroy()
@@ -53,7 +52,10 @@ def browse_for_folder() -> str:
 # Fichiers qui indiquent qu'un dossier est un projet
 PROJECT_INDICATORS = [
     # Python
-    "pyproject.toml", "setup.py", "requirements.txt", "Pipfile",
+    "pyproject.toml",
+    "setup.py",
+    "requirements.txt",
+    "Pipfile",
     # Node.js
     "package.json",
     # Rust
@@ -61,16 +63,24 @@ PROJECT_INDICATORS = [
     # Go
     "go.mod",
     # Java/Kotlin
-    "pom.xml", "build.gradle", "build.gradle.kts",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
     # .NET
-    "*.csproj", "*.sln",
+    "*.csproj",
+    "*.sln",
     # Ruby
     "Gemfile",
     # PHP
     "composer.json",
     # Generic
-    "Makefile", "Dockerfile", "docker-compose.yml", "docker-compose.yaml",
-    ".git", "README.md", "README.rst",
+    "Makefile",
+    "Dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    ".git",
+    "README.md",
+    "README.rst",
 ]
 
 
@@ -105,14 +115,14 @@ def is_valid_project(path: Path) -> tuple[bool, str, list[str]]:
 
     # Check if it has subdirectories with code
     has_code_files = False
-    code_extensions = ['.py', '.js', '.ts', '.go', '.rs', '.java', '.cs', '.rb', '.php']
+    code_extensions = [".py", ".js", ".ts", ".go", ".rs", ".java", ".cs", ".rb", ".php"]
 
     try:
         for item in path.iterdir():
             if item.is_file() and item.suffix in code_extensions:
                 has_code_files = True
                 break
-            if item.is_dir() and not item.name.startswith('.'):
+            if item.is_dir() and not item.name.startswith("."):
                 # Check one level deep
                 for subitem in item.iterdir():
                     if subitem.is_file() and subitem.suffix in code_extensions:
@@ -179,6 +189,7 @@ def get_folder_info(path_str: str) -> str:
 # LLM-POWERED SCAN (Ollama)
 # =============================================================================
 
+
 def collect_project_data(path: Path, max_depth: int = 5) -> dict:
     """
     Collecte les données brutes d'un projet pour analyse LLM.
@@ -192,39 +203,70 @@ def collect_project_data(path: Path, max_depth: int = 5) -> dict:
         "readme": "",
         "configs": {},
         "key_files": {},
-        "stats": {
-            "total_files": 0,
-            "total_dirs": 0,
-            "extensions": {}
-        }
+        "stats": {"total_files": 0, "total_dirs": 0, "extensions": {}},
     }
 
     # Fichiers de config importants à lire
     config_files = [
-        "README.md", "README.rst", "README.txt", "README",
-        "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt",
-        "package.json", "tsconfig.json",
-        "Cargo.toml", "go.mod", "go.sum",
-        "pom.xml", "build.gradle",
-        "Gemfile", "composer.json",
-        "Makefile", "Dockerfile", "docker-compose.yml", "docker-compose.yaml",
-        ".env.example", ".env.sample",
-        "CLAUDE.md", "CONTEXT.md", "PROJECT.md",
+        "README.md",
+        "README.rst",
+        "README.txt",
+        "README",
+        "pyproject.toml",
+        "setup.py",
+        "setup.cfg",
+        "requirements.txt",
+        "package.json",
+        "tsconfig.json",
+        "Cargo.toml",
+        "go.mod",
+        "go.sum",
+        "pom.xml",
+        "build.gradle",
+        "Gemfile",
+        "composer.json",
+        "Makefile",
+        "Dockerfile",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+        ".env.example",
+        ".env.sample",
+        "CLAUDE.md",
+        "CONTEXT.md",
+        "PROJECT.md",
     ]
 
     # Extensions de fichiers clés à échantillonner
-    key_extensions = {'.py', '.js', '.ts', '.go', '.rs', '.java', '.rb', '.php', '.cs'}
+    key_extensions = {".py", ".js", ".ts", ".go", ".rs", ".java", ".rb", ".php", ".cs"}
 
     def should_skip(name: str) -> bool:
         """Dossiers à ignorer pour l'arbre mais pas pour les stats."""
         skip_dirs = {
-            'node_modules', '.git', '__pycache__', '.venv', 'venv',
-            'env', '.env', 'dist', 'build', '.next', '.nuxt',
-            'target', 'vendor', '.idea', '.vscode', '.cache',
-            'coverage', '.pytest_cache', '.mypy_cache', 'eggs',
-            '*.egg-info', 'htmlcov', '.tox'
+            "node_modules",
+            ".git",
+            "__pycache__",
+            ".venv",
+            "venv",
+            "env",
+            ".env",
+            "dist",
+            "build",
+            ".next",
+            ".nuxt",
+            "target",
+            "vendor",
+            ".idea",
+            ".vscode",
+            ".cache",
+            "coverage",
+            ".pytest_cache",
+            ".mypy_cache",
+            "eggs",
+            "*.egg-info",
+            "htmlcov",
+            ".tox",
         }
-        return name in skip_dirs or name.startswith('.')
+        return name in skip_dirs or name.startswith(".")
 
     def scan_dir(dir_path: Path, depth: int, prefix: str = "") -> list[str]:
         """Scan récursif pour construire l'arbre."""
@@ -273,22 +315,22 @@ def collect_project_data(path: Path, max_depth: int = 5) -> dict:
                 # Lire les fichiers de config
                 if f.name in config_files:
                     try:
-                        content = f.read_text(encoding='utf-8', errors='ignore')[:5000]
-                        if f.name.lower().startswith('readme'):
+                        content = f.read_text(encoding="utf-8", errors="ignore")[:5000]
+                        if f.name.lower().startswith("readme"):
                             data["readme"] = content
                         else:
                             data["configs"][f.name] = content
-                    except:
+                    except OSError:
                         pass
 
                 # Échantillonner les fichiers clés (premier du type)
                 elif ext in key_extensions and ext not in data["key_files"]:
                     try:
-                        content = f.read_text(encoding='utf-8', errors='ignore')
+                        content = f.read_text(encoding="utf-8", errors="ignore")
                         # Prendre les 100 premières lignes
-                        lines = content.split('\n')[:100]
-                        data["key_files"][f.name] = '\n'.join(lines)
-                    except:
+                        lines = content.split("\n")[:100]
+                        data["key_files"][f.name] = "\n".join(lines)
+                    except OSError:
                         pass
 
             if hidden_count > 0:
@@ -310,7 +352,7 @@ def build_llm_prompt(project_name: str, data: dict, description: str = "") -> st
     Construit le prompt pour Ollama pour générer la config projet.
     STRICT: Le LLM doit UNIQUEMENT utiliser les données fournies, jamais inventer.
     """
-    file_tree_str = '\n'.join(data["file_tree"][:300])  # Plus de contexte
+    file_tree_str = "\n".join(data["file_tree"][:300])  # Plus de contexte
 
     # Construire la section configs avec plus de contenu
     configs_str = ""
@@ -323,15 +365,15 @@ def build_llm_prompt(project_name: str, data: dict, description: str = "") -> st
         key_files_str += f"\n### {name} (extrait)\n```\n{content[:1500]}\n```\n"
 
     # Stats extensions
-    top_extensions = sorted(
-        data["stats"]["extensions"].items(),
-        key=lambda x: x[1],
-        reverse=True
-    )[:15]
+    top_extensions = sorted(data["stats"]["extensions"].items(), key=lambda x: x[1], reverse=True)[
+        :15
+    ]
     extensions_str = ", ".join([f"{ext}: {count}" for ext, count in top_extensions])
 
     # Description utilisateur si fournie
-    desc_section = f"\n## DESCRIPTION FOURNIE PAR L'UTILISATEUR\n{description}\n" if description else ""
+    desc_section = (
+        f"\n## DESCRIPTION FOURNIE PAR L'UTILISATEUR\n{description}\n" if description else ""
+    )
 
     prompt = f"""# MISSION CRITIQUE
 
@@ -452,7 +494,9 @@ def _generate_security_section(path: Path, check_cves: bool = True) -> tuple[str
             "elevated": "🟠 **ÉLEVÉ** - Vigilance accrue recommandée",
             "standard": "🟢 **STANDARD** - Bonnes pratiques à appliquer",
         }
-        lines.append(f"> Niveau de sécurité: {level_indicators.get(security_context.security_level, 'STANDARD')}")
+        lines.append(
+            f"> Niveau de sécurité: {level_indicators.get(security_context.security_level, 'STANDARD')}"
+        )
         lines.append("")
 
         # Language-specific guidelines
@@ -468,7 +512,10 @@ def _generate_security_section(path: Path, check_cves: bool = True) -> tuple[str
                 lines.append("- `bcrypt` ou `argon2` pour le hashing de mots de passe")
                 lines.append("")
 
-            if "javascript" in security_context.languages or "typescript" in security_context.languages:
+            if (
+                "javascript" in security_context.languages
+                or "typescript" in security_context.languages
+            ):
                 lines.append("#### JavaScript/TypeScript")
                 lines.append("- Échapper les outputs HTML (prévention XSS)")
                 lines.append("- Valider les inputs côté serveur")
@@ -500,7 +547,9 @@ def _generate_security_section(path: Path, check_cves: bool = True) -> tuple[str
                 lines.append("- JWT avec expiration courte")
                 lines.append("")
 
-            if any(k in security_context.security_keywords_found for k in ["database", "sql", "query"]):
+            if any(
+                k in security_context.security_keywords_found for k in ["database", "sql", "query"]
+            ):
                 lines.append("#### 🗄️ Base de Données")
                 lines.append("- **TOUJOURS** requêtes paramétrées")
                 lines.append("- Principe du moindre privilège")
@@ -551,11 +600,7 @@ def _generate_security_section(path: Path, check_cves: bool = True) -> tuple[str
 
 
 def generate_config_with_llm(
-    path_str: str,
-    project_name: str,
-    description: str = "",
-    depth: int = 5,
-    check_cves: bool = True
+    path_str: str, project_name: str, description: str = "", depth: int = 5, check_cves: bool = True
 ) -> tuple[str, str, str]:
     """
     Génère la config projet en utilisant Ollama pour l'analyse.
@@ -598,7 +643,7 @@ RÈGLES CRITIQUES:
 2. Tu ne doit JAMAIS inventer de technologies, frameworks ou fonctionnalités
 3. Si tu ne vois pas une technologie dans les fichiers, tu ne la mentionnes PAS
 4. Tu réponds UNIQUEMENT en Markdown, sans texte avant ou après
-5. Tu bases ton analyse sur les fichiers RÉELS listés dans les dossiers et sous dossier qui t'ont été fournis"""
+5. Tu bases ton analyse sur les fichiers RÉELS listés dans les dossiers et sous dossier qui t'ont été fournis""",
         )
 
         if not config:
@@ -627,7 +672,9 @@ RÈGLES CRITIQUES:
 
 ### Extensions détectées
 """
-        for ext, count in sorted(data["stats"]["extensions"].items(), key=lambda x: x[1], reverse=True)[:8]:
+        for ext, count in sorted(
+            data["stats"]["extensions"].items(), key=lambda x: x[1], reverse=True
+        )[:8]:
             summary += f"- `{ext}`: {count} fichiers\n"
 
         if data["readme"]:
@@ -639,7 +686,9 @@ RÈGLES CRITIQUES:
         if security_alerts:
             crit = sum(1 for a in security_alerts if a.severity == "CRITICAL")
             high = sum(1 for a in security_alerts if a.severity == "HIGH")
-            summary += f"\n⚠️ **{len(security_alerts)} CVE détectées** ({crit} critiques, {high} élevées)"
+            summary += (
+                f"\n⚠️ **{len(security_alerts)} CVE détectées** ({crit} critiques, {high} élevées)"
+            )
         else:
             summary += "\n✅ Section sécurité ajoutée"
 
@@ -654,12 +703,13 @@ RÈGLES CRITIQUES:
 # SCAN FUNCTIONS (legacy + new)
 # =============================================================================
 
+
 def scan_directory_for_ui(
     path_str: str,
     project_name: str,
-    description: Optional[str] = None,
+    description: str | None = None,
     depth: int = 5,
-    check_cves: bool = False
+    check_cves: bool = False,
 ) -> tuple[str, str, str]:
     """
     Scan a directory and return results for UI display.
@@ -702,9 +752,7 @@ def scan_directory_for_ui(
 
         # Generate config
         config = scanner.generate_config(
-            result,
-            project_name.strip(),
-            description.strip() if description else None
+            result, project_name.strip(), description.strip() if description else None
         )
 
         status = f"✅ Scan terminé: {result.files_scanned} fichiers en {result.scan_duration_ms}ms"
@@ -905,9 +953,7 @@ def format_scan_summary(result: ScanResult) -> str:
 
 
 def save_scanned_config(
-    project_name: str,
-    config_content: str,
-    auto_activate: bool = True
+    project_name: str, config_content: str, auto_activate: bool = True
 ) -> tuple[str, gr.update, gr.update]:
     """
     Save the generated config and register as project.
@@ -951,7 +997,7 @@ def save_scanned_config(
     return (
         status,
         gr.update(choices=projects, value=normalized_name if success else None),
-        gr.update(choices=projects)
+        gr.update(choices=projects),
     )
 
 
@@ -965,10 +1011,7 @@ def get_default_scan_path() -> str:
 
 
 def scan_uploaded_zip(
-    zip_file,
-    project_name: str,
-    description: Optional[str] = None,
-    depth: int = 3
+    zip_file, project_name: str, description: str | None = None, depth: int = 3
 ) -> tuple[str, str, str]:
     """
     Scan an uploaded ZIP file containing a project.
@@ -989,7 +1032,7 @@ def scan_uploaded_zip(
         return "❌ Entrez un nom de projet", "", ""
 
     # Get the file path from Gradio upload
-    zip_path = Path(zip_file.name if hasattr(zip_file, 'name') else zip_file)
+    zip_path = Path(zip_file.name if hasattr(zip_file, "name") else zip_file)
 
     if not zip_path.exists():
         return "❌ Fichier non trouvé", "", ""
@@ -1004,7 +1047,7 @@ def scan_uploaded_zip(
         extract_path = Path(temp_dir) / "project"
 
         # Extract ZIP
-        with zipfile.ZipFile(zip_path, 'r') as zf:
+        with zipfile.ZipFile(zip_path, "r") as zf:
             zf.extractall(extract_path)
 
         # Check if ZIP contains a single root folder
@@ -1025,9 +1068,7 @@ def scan_uploaded_zip(
 
         # Generate config
         config = scanner.generate_config(
-            result,
-            project_name.strip(),
-            description.strip() if description else None
+            result, project_name.strip(), description.strip() if description else None
         )
 
         status = f"✅ Scan terminé: {result.files_scanned} fichiers en {result.scan_duration_ms}ms"
@@ -1043,5 +1084,5 @@ def scan_uploaded_zip(
         if temp_dir and Path(temp_dir).exists():
             try:
                 shutil.rmtree(temp_dir)
-            except:
+            except OSError:
                 pass

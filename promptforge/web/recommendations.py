@@ -69,26 +69,26 @@ UNKNOWN_MODEL_NOTICE = (
 )
 
 DOMAIN_LABELS = {
-    'code': '💻 Code/Dev',
-    'legal': '⚖️ Juridique',
-    'medical': '🏥 Médical/Santé',
-    'finance': '💹 Finance',
-    'creative': '✨ Créatif',
-    'research': '🔬 Recherche',
-    'data': '📊 Data/Analytics',
-    'math': '🔢 Mathématiques',
-    'image': '🎨 Génération d\'Images',
-    'document': '📄 Analyse de Documents',
-    'general': '🔧 Général',
-    'analysis': '📊 Analyse',
-    'chat': '💬 Chat',
+    "code": "💻 Code/Dev",
+    "legal": "⚖️ Juridique",
+    "medical": "🏥 Médical/Santé",
+    "finance": "💹 Finance",
+    "creative": "✨ Créatif",
+    "research": "🔬 Recherche",
+    "data": "📊 Data/Analytics",
+    "math": "🔢 Mathématiques",
+    "image": "🎨 Génération d'Images",
+    "document": "📄 Analyse de Documents",
+    "general": "🔧 Général",
+    "analysis": "📊 Analyse",
+    "chat": "💬 Chat",
     # Domaines métiers
-    'seo': '🔍 SEO/Référencement',
-    'marketing': '📢 Marketing Digital',
-    'hr': '👥 RH/Recrutement',
-    'sales': '💼 Commercial/Ventes',
-    'product': '🎯 Product Management',
-    'support': '🎧 Support Client',
+    "seo": "🔍 SEO/Référencement",
+    "marketing": "📢 Marketing Digital",
+    "hr": "👥 RH/Recrutement",
+    "sales": "💼 Commercial/Ventes",
+    "product": "🎯 Product Management",
+    "support": "🎧 Support Client",
 }
 
 
@@ -152,16 +152,16 @@ def get_ollama_model_info(ollama_model: str) -> dict | None:
 
     model = CATALOG.get(ollama_model.strip())
     if model is None:
-        return {'name': ollama_model, 'known': False}
+        return {"name": ollama_model, "known": False}
 
     return {
-        'name': model.tag,
-        'known': True,
-        'memory': format_memory_footprint(model),
-        'tier_label': model.memory_tier_label,
-        'license': format_license(model),
-        'source_url': model.source_url,
-        'verified_on': model.verified_on,
+        "name": model.tag,
+        "known": True,
+        "memory": format_memory_footprint(model),
+        "tier_label": model.memory_tier_label,
+        "license": format_license(model),
+        "source_url": model.source_url,
+        "verified_on": model.verified_on,
     }
 
 
@@ -194,10 +194,7 @@ def _local_catalog_lines() -> list[str]:
 
 
 def generate_recommendation(
-    formatted_prompt: str,
-    task_type: str,
-    ollama_model: str = None,
-    domain_override: str = None
+    formatted_prompt: str, task_type: str, ollama_model: str = None, domain_override: str = None
 ) -> str:
     """Compose le panneau de recommandation affiche apres un reformatage.
 
@@ -213,15 +210,24 @@ def generate_recommendation(
     """
     input_tokens = estimate_tokens(formatted_prompt)
     output_multiplier = {
-        'code': 2.5, 'legal': 1.5, 'medical': 1.2, 'finance': 1.5,
-        'creative': 2.0, 'research': 1.5, 'data': 1.5, 'math': 1.0,
-        'analysis': 1.5, 'chat': 0.8, 'general': 1.5,
-        'image': 0.5, 'document': 2.0,
+        "code": 2.5,
+        "legal": 1.5,
+        "medical": 1.2,
+        "finance": 1.5,
+        "creative": 2.0,
+        "research": 1.5,
+        "data": 1.5,
+        "math": 1.0,
+        "analysis": 1.5,
+        "chat": 0.8,
+        "general": 1.5,
+        "image": 0.5,
+        "document": 2.0,
     }
     output_tokens = int(input_tokens * output_multiplier.get(task_type, 1.5))
 
     domain = domain_override if domain_override else detect_domain(formatted_prompt)
-    domain_display = DOMAIN_LABELS.get(domain, '🔧 Général')
+    domain_display = DOMAIN_LABELS.get(domain, "🔧 Général")
 
     ollama_info = get_ollama_model_info(ollama_model)
 
@@ -236,7 +242,7 @@ def generate_recommendation(
         lines.append("---")
         lines.append("### 🔧 Modèle de reformatage (local)\n")
 
-        if ollama_info['known']:
+        if ollama_info["known"]:
             lines.append("| Modèle | Empreinte mémoire | Palier | Licence | Coût |")
             lines.append("|--------|-------------------|--------|---------|------|")
             lines.append(
@@ -261,17 +267,19 @@ def generate_recommendation(
     # critère 10 de F-021).
     all_models = []
     for model, pricing in MODEL_PRICING.items():
-        all_models.append({
-            'model': model,
-            # Nom commercial publié par l'éditeur, pas l'identifiant d'API :
-            # cette table est lue par un humain (F-028).
-            'name': pricing.display_name or model.value,
-            'cost': pricing.estimate_cost(input_tokens, output_tokens),
-            'context': format_context_window(pricing) or "non confirmé",
-            'source_url': pricing.source_url,
-        })
+        all_models.append(
+            {
+                "model": model,
+                # Nom commercial publié par l'éditeur, pas l'identifiant d'API :
+                # cette table est lue par un humain (F-028).
+                "name": pricing.display_name or model.value,
+                "cost": pricing.estimate_cost(input_tokens, output_tokens),
+                "context": format_context_window(pricing) or "non confirmé",
+                "source_url": pricing.source_url,
+            }
+        )
 
-    all_models.sort(key=lambda m: (m['cost'], m['name']))
+    all_models.sort(key=lambda m: (m["cost"], m["name"]))
 
     lines.append("\n---")
     lines.append(f"### 💵 Coût estimé pour exécuter ce prompt ({domain_display})\n")
@@ -279,14 +287,11 @@ def generate_recommendation(
     lines.append("| # | Modèle | Coût estimé | Contexte |")
     lines.append("|---|--------|-------------|----------|")
     for i, m in enumerate(all_models, 1):
-        lines.append(
-            f"| {i} | **{m['name']}** | ${m['cost']:.4f} | {m['context']} |"
-        )
+        lines.append(f"| {i} | **{m['name']}** | ${m['cost']:.4f} | {m['context']} |")
 
     cheapest = all_models[0]
     lines.append(
-        f"\n💰 **Le moins cher pour ce prompt :** {cheapest['name']} "
-        f"(${cheapest['cost']:.4f})"
+        f"\n💰 **Le moins cher pour ce prompt :** {cheapest['name']} " f"(${cheapest['cost']:.4f})"
     )
 
     # --- Sources des tarifs affichés -----------------------------------------
@@ -295,7 +300,7 @@ def generate_recommendation(
     # L'ancienne liste `BENCHMARK_SOURCES` renvoyait vers des annonces de
     # générations révolues (Claude Opus 4.5, GPT-5) et ne sourçait plus rien de
     # ce qui restait à l'écran : elle est supprimée (DEC-004 §1).
-    sources = sorted({m['source_url'] for m in all_models if m['source_url']})
+    sources = sorted({m["source_url"] for m in all_models if m["source_url"]})
     if sources:
         lines.append("\n---")
         lines.append("### 📚 Sources des tarifs\n")
@@ -328,7 +333,7 @@ def get_comparison_table() -> str:
 
     lines = [
         "| Modèle | Input/M | Output/M | Contexte | Coût 1K+500 |",
-        "|--------|---------|----------|----------|-------------|"
+        "|--------|---------|----------|----------|-------------|",
     ]
 
     # `label` et non `model` : le tableau s'adresse a l'utilisateur, pas a un
@@ -358,7 +363,7 @@ def calculate_costs(input_tokens: int, output_tokens: int) -> str:
         f"### 💵 Coût estimé pour {int(input_tokens):,} input + "
         f"{int(output_tokens):,} output tokens\n",
         "| Modèle | Coût |",
-        "|--------|------|"
+        "|--------|------|",
     ]
 
     for c in comparisons:
@@ -369,8 +374,7 @@ def calculate_costs(input_tokens: int, output_tokens: int) -> str:
 
     lines.append(f"\n**💰 Le moins cher:** {cheapest['label']} ({cheapest['cost_display']})")
     lines.append(
-        f"\n**💸 Le plus cher:** {most_expensive['label']} "
-        f"({most_expensive['cost_display']})"
+        f"\n**💸 Le plus cher:** {most_expensive['label']} " f"({most_expensive['cost_display']})"
     )
     lines.append(f"\n> {CLOUD_ORDER_DISCLAIMER}")
 

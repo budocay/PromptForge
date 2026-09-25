@@ -8,35 +8,43 @@ Includes tests with REAL vulnerable packages to verify CVE detection works.
 
 import io
 import json as _json
+import tempfile
 import urllib.error
 import urllib.request
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from promptforge.security import (
-    detect_dev_context,
-    detect_dependencies_from_text,
-    check_cve_osv,
-    check_cve_osv_detailed,
-    check_package_cve,
-    get_security_guidelines,
-    enrich_prompt_with_security,
-    format_cve_alert,
-    normalize_osv_ecosystem,
-    normalize_osv_package_name,
-    CVECheckOutcome,
-    CVEInfo,
     CVE_CHECK_INCOMPLETE_PREFIX,
     OSV_SUPPORTED_ECOSYSTEMS,
     OSV_UNSUPPORTED_ECOSYSTEMS,
+    CVECheckOutcome,
+    CVEInfo,
+    SecretFinding,
     SecurityContext,
+    check_cve_osv,
+    check_cve_osv_detailed,
+    check_package_cve,
+    detect_dependencies_from_text,
+    detect_dev_context,
+    enrich_prompt_with_security,
+    format_cve_alert,
+    format_secret_alerts,
+    get_security_guidelines,
+    is_placeholder_value,
+    mask_secret,
+    normalize_osv_ecosystem,
+    normalize_osv_package_name,
+    scan_directory_for_secrets,
+    scan_file_for_secrets,
 )
-
 
 # =============================================================================
 # DEV CONTEXT DETECTION TESTS
 # =============================================================================
+
 
 class TestDevContextDetection:
     """Tests for detect_dev_context function."""
@@ -75,7 +83,10 @@ class TestDevContextDetection:
         text = "Create a login endpoint with JWT authentication and password hashing"
         context = detect_dev_context(text)
         assert context.is_dev
-        assert "auth" in context.security_keywords_found or "authentication" in context.security_keywords_found
+        assert (
+            "auth" in context.security_keywords_found
+            or "authentication" in context.security_keywords_found
+        )
         assert "jwt" in context.security_keywords_found
         assert "password" in context.security_keywords_found
 
@@ -135,14 +146,14 @@ class TestDependencyDetection:
         serde = "1.0.130"
         """
         deps = detect_dependencies_from_text(text)
-        packages = [d[1] for d in deps]
-        # Note: may have false positives, but should find packages
-        assert len(deps) >= 0  # Best effort
+        assert ("crates.io", "tokio", "1.0.0") in deps
+        assert ("crates.io", "serde", "1.0.130") in deps
 
 
 # =============================================================================
 # CVE CHECKING TESTS (REAL API CALLS)
 # =============================================================================
+
 
 class TestCVEChecking:
     """Tests for CVE checking via OSV.dev API.
@@ -209,6 +220,7 @@ class TestCVEChecking:
 # SECURITY GUIDELINES TESTS
 # =============================================================================
 
+
 class TestSecurityGuidelines:
     """Tests for security guidelines generation."""
 
@@ -218,7 +230,7 @@ class TestSecurityGuidelines:
             is_dev=True,
             languages=["python"],
             security_keywords_found=["database", "sql"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
         assert "Python Security" in guidelines
@@ -230,7 +242,7 @@ class TestSecurityGuidelines:
             is_dev=True,
             languages=["python"],
             security_keywords_found=["auth", "jwt", "password"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
         assert "Authentification" in guidelines
@@ -242,7 +254,7 @@ class TestSecurityGuidelines:
             is_dev=True,
             languages=["python"],
             security_keywords_found=["sql", "database", "query"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
         assert "Base de donnees" in guidelines or "parametrees" in guidelines
@@ -255,14 +267,14 @@ class TestSecurityGuidelines:
             severity="HIGH",
             package="test-package",
             affected_versions="1.0.0 - 1.5.0",
-            fixed_version="1.5.1"
+            fixed_version="1.5.1",
         )
         context = SecurityContext(
             is_dev=True,
             languages=["python"],
             security_keywords_found=["database"],
             cves=[cve],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
         assert "CVE-2021-12345" in guidelines
@@ -275,7 +287,7 @@ class TestSecurityGuidelines:
             is_dev=True,
             languages=["python"],
             security_keywords_found=["api"],
-            security_level="standard"
+            security_level="standard",
         )
         guidelines = get_security_guidelines(context)
         assert "OWASP" in guidelines
@@ -291,6 +303,7 @@ class TestSecurityGuidelines:
 # =============================================================================
 # INTEGRATION HELPER TESTS
 # =============================================================================
+
 
 class TestEnrichPromptWithSecurity:
     """Tests for enrich_prompt_with_security function."""
@@ -310,7 +323,9 @@ class TestEnrichPromptWithSecurity:
         raw_prompt = "Add a login endpoint"
         project_context = "# My Python API\nUsing Flask and SQLAlchemy"
 
-        enriched, context = enrich_prompt_with_security(raw_prompt, project_context, check_cves=False)
+        enriched, context = enrich_prompt_with_security(
+            raw_prompt, project_context, check_cves=False
+        )
 
         assert "My Python API" in enriched
         assert "SECURITE" in enriched or "Security" in enriched
@@ -333,7 +348,9 @@ class TestEnrichPromptWithSecurity:
         requests==2.25.0
         """
 
-        enriched, context = enrich_prompt_with_security(raw_prompt, project_context, check_cves=True)
+        enriched, context = enrich_prompt_with_security(
+            raw_prompt, project_context, check_cves=True
+        )
 
         print(f"Found {len(context.cves)} CVEs")
         print(f"Enriched context length: {len(enriched)}")
@@ -375,6 +392,7 @@ class TestCVEAlertFormatting:
 # =============================================================================
 # REAL WORLD SCENARIO TESTS
 # =============================================================================
+
 
 class TestRealWorldScenarios:
     """Tests simulating real-world usage scenarios."""
@@ -430,7 +448,7 @@ class TestRealWorldScenarios:
         prompt = "Help me secure this Django project"
         enriched, context = enrich_prompt_with_security(prompt, project_config, check_cves=True)
 
-        print(f"\n=== Vulnerable Project Scan Results ===")
+        print("\n=== Vulnerable Project Scan Results ===")
         print(f"Languages detected: {context.languages}")
         print(f"Security keywords: {context.security_keywords_found}")
         print(f"Security level: {context.security_level}")
@@ -439,24 +457,13 @@ class TestRealWorldScenarios:
         for cve in context.cves:
             print(f"  - {cve.id} ({cve.severity}): {cve.package}")
 
-        print(f"\nEnriched context preview (first 500 chars):")
+        print("\nEnriched context preview (first 500 chars):")
         print(enriched[:500])
 
 
 # =============================================================================
 # SECRET DETECTION TESTS
 # =============================================================================
-
-from promptforge.security import (
-    scan_file_for_secrets,
-    scan_directory_for_secrets,
-    format_secret_alerts,
-    mask_secret,
-    is_placeholder_value,
-    SecretFinding,
-)
-from pathlib import Path
-import tempfile
 
 
 # Identifiants synthetiques, invalides, generes pour ces tests uniquement.
@@ -476,9 +483,7 @@ import tempfile
 # declencher la regle, prefixe coupe ou non. Sous dix caracteres, aucun fragment
 # ne peut la satisfaire, quelle que soit son entropie.
 FAKE_AWS_ACCESS_KEY_ID = "AKIA" + "3F7KQ2N" + "9WBXDLZ4T"  # 4 + 16 = 20
-FAKE_AWS_SECRET_KEY = (
-    "kR9dTn2Q" + "vL7mXe4W" + "zB1sYcJ0" + "pHgAfU6i" + "N3oD8rTq"
-)  # 5 x 8 = 40
+FAKE_AWS_SECRET_KEY = "kR9dTn2Q" + "vL7mXe4W" + "zB1sYcJ0" + "pHgAfU6i" + "N3oD8rTq"  # 5 x 8 = 40
 FAKE_GITHUB_TOKEN = (
     "ghp_" + "Kq7Zx2Vb" + "9NmTr4Lp" + "1Wc6Ys3H" + "d8Jf0Gu5" + "Ae2B"
 )  # 4 + 36 = 40
@@ -487,9 +492,7 @@ FAKE_GITHUB_TOKEN = (
 # etre remontes comme des secrets : ils sont copies dans d'innombrables README,
 # `.env.example` et tutoriels. Meme decoupage a huit caracteres, meme motif.
 AWS_DOC_EXAMPLE_ACCESS_KEY_ID = "AKIAIOSF" + "ODNN7" + "EXAMPLE"
-AWS_DOC_EXAMPLE_SECRET_KEY = (
-    "wJalrXUt" + "nFEMI/K7" + "MDENG/bP" + "xRfiCY" + "EXAMPLE" + "KEY"
-)
+AWS_DOC_EXAMPLE_SECRET_KEY = "wJalrXUt" + "nFEMI/K7" + "MDENG/bP" + "xRfiCY" + "EXAMPLE" + "KEY"
 
 
 class TestSecretMasking:
@@ -519,7 +522,7 @@ class TestSecretFileScanning:
 
     def test_scan_env_file_with_secrets(self):
         """Should detect secrets in .env file."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
             f.write("DATABASE_URL=postgresql://user:password123@localhost/db\n")
             f.write("API_KEY=sk-1234567890abcdefghijklmnopqrstuvwxyz\n")
             f.flush()
@@ -535,7 +538,7 @@ class TestSecretFileScanning:
 
     def test_scan_file_with_aws_keys(self):
         """Should detect AWS credentials that are not documentation examples."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
             f.write(f"AWS_ACCESS_KEY_ID={FAKE_AWS_ACCESS_KEY_ID}\n")
             f.write(f"AWS_SECRET_ACCESS_KEY={FAKE_AWS_SECRET_KEY}\n")
             f.flush()
@@ -571,10 +574,7 @@ class TestSecretFileScanning:
     def test_aws_access_key_id_longer_than_20_chars_not_flagged(self):
         """Should not report an AKIA-prefixed blob that is not 20 chars long."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
-            f.write(
-                "AWS_ACCESS_KEY_ID="
-                + "AKIA" + "3F7KQ2N" + "9WBXDLZ" + "4TQRST" + "\n"
-            )
+            f.write("AWS_ACCESS_KEY_ID=" + "AKIA" + "3F7KQ2N" + "9WBXDLZ" + "4TQRST" + "\n")
             f.flush()
             path = Path(f.name)
 
@@ -592,7 +592,7 @@ class TestSecretFileScanning:
         """
         assert len(FAKE_GITHUB_TOKEN) == 40
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
             f.write(f"GITHUB_TOKEN={FAKE_GITHUB_TOKEN}\n")
             f.flush()
             path = Path(f.name)
@@ -624,7 +624,7 @@ class TestSecretFileScanning:
 
     def test_skip_placeholder_values(self):
         """Should skip placeholder values."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
             f.write("API_KEY=your_api_key_here\n")
             f.write("SECRET=<replace_with_secret>\n")
             f.write("PASSWORD=changeme\n")
@@ -640,9 +640,8 @@ class TestSecretFileScanning:
 
     def test_skip_comments(self):
         """Should skip commented lines."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
-            f.write("# API_KEY=sk-12345" + "67890abc" + "defghijk"
-                    + "lmnopqrs" + "tuvwxyz\n")
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
+            f.write("# API_KEY=sk-12345" + "67890abc" + "defghijk" + "lmnopqrs" + "tuvwxyz\n")
             f.write("// ANOTHER_KEY=secret1" + "23456789" + "012345\n")
             f.flush()
             path = Path(f.name)
@@ -720,11 +719,11 @@ class TestSecretDirectoryScanning:
             project = Path(tmpdir)
 
             # Create .env file
-            (project / '.env').write_text("API_KEY=sk-1234567890abcdef\n")
+            (project / ".env").write_text("API_KEY=sk-1234567890abcdef\n")
 
             # Create config.py
-            (project / 'config.py').write_text(
-                'SECRET = "' + 'my_secre' + 't_value' + '_1234567' + '89"\n'
+            (project / "config.py").write_text(
+                'SECRET = "' + "my_secre" + "t_value" + "_1234567" + '89"\n'
             )
 
             findings = scan_directory_for_secrets(project)
@@ -736,14 +735,12 @@ class TestSecretDirectoryScanning:
             project = Path(tmpdir)
 
             # Create node_modules with secrets (should be skipped)
-            nm = project / 'node_modules' / 'some_pkg'
+            nm = project / "node_modules" / "some_pkg"
             nm.mkdir(parents=True)
-            (nm / 'config.js').write_text(
-                'const KEY = "' + 'sk-12345' + '67890abc' + 'def";\n'
-            )
+            (nm / "config.js").write_text('const KEY = "' + "sk-12345" + "67890abc" + 'def";\n')
 
             # Create real file with secret
-            (project / '.env').write_text("API_KEY=sk-realkey1234567890\n")
+            (project / ".env").write_text("API_KEY=sk-realkey1234567890\n")
 
             findings = scan_directory_for_secrets(project)
 
@@ -772,7 +769,7 @@ class TestSecretAlertFormatting:
                 key_name="AWS_SECRET_KEY",
                 masked_value="wJal****EKEY",
                 severity="CRITICAL",
-                recommendation="Use AWS IAM roles"
+                recommendation="Use AWS IAM roles",
             )
         ]
         alert = format_secret_alerts(findings)
@@ -791,7 +788,7 @@ class TestSecretAlertFormatting:
                 key_name="API_KEY",
                 masked_value="sk-1****wxyz",
                 severity="HIGH",
-                recommendation="Use environment variables"
+                recommendation="Use environment variables",
             )
         ]
         alert = format_secret_alerts(findings)
@@ -814,7 +811,7 @@ class TestSecretAlertFormatting:
                 key_name="TEST",
                 masked_value="****",
                 severity="HIGH",
-                recommendation="Test rec"
+                recommendation="Test rec",
             )
         ]
         alert = format_secret_alerts(findings)
@@ -828,7 +825,7 @@ class TestSecretPatterns:
 
     def test_detect_openai_key(self):
         """Should detect OpenAI API keys."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
             f.write("OPENAI_API_KEY=sk-proj-1234567890abcdefghijklmnopqrstuvwxyz\n")
             f.flush()
             path = Path(f.name)
@@ -841,7 +838,7 @@ class TestSecretPatterns:
 
     def test_detect_anthropic_key(self):
         """Should detect Anthropic API keys."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
             f.write("ANTHROPIC_API_KEY=sk-ant-api03-abcdefghijklmnopqrstuvwxyz12345678\n")
             f.flush()
             path = Path(f.name)
@@ -857,7 +854,7 @@ class TestSecretPatterns:
         # Use fake key that looks real but won't trigger GitHub scanner
         # Pattern: sk_live_ + 24 alphanumeric (avoid xxx which is filtered as placeholder)
         fake_stripe_key = "sk_live_" + "0a1b2c3d" + "4e5f6g7h" + "8i9j0k1l"
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write(f'STRIPE_SECRET_KEY = "{fake_stripe_key}"\n')
             f.flush()
             path = Path(f.name)
@@ -873,7 +870,7 @@ class TestSecretPatterns:
     def test_detect_jwt_token(self):
         """Should detect JWT tokens."""
         jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write(f'TOKEN = "{jwt}"\n')
             f.flush()
             path = Path(f.name)
@@ -886,7 +883,7 @@ class TestSecretPatterns:
 
     def test_detect_private_key(self):
         """Should detect private keys."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.pem', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as f:
             f.write("-----BEGIN RSA PRIVATE KEY-----\n")
             f.write("MIIEpAIBAAKCAQEA0Z3VS5JJcds3xfn/ygWyF6M...\n")
             f.write("-----END RSA PRIVATE KEY-----\n")
@@ -901,7 +898,6 @@ class TestSecretPatterns:
             path.unlink()
 
 
-
 # =============================================================================
 # OSV.DEV : ECOSYSTEMES, RESILIENCE DES LOTS, ECHEC DISTINCT DE L'ABSENCE
 # =============================================================================
@@ -910,8 +906,17 @@ class TestSecretPatterns:
 # `POST https://api.osv.dev/v1/querybatch`, paquet fictif `foo` version `1.0.0`.
 # Ce sont des faits, pas une intention : ils verrouillent la table du module.
 OSV_ECOSYSTEMS_MEASURED_200 = {
-    "PyPI", "npm", "Go", "crates.io", "Maven", "NuGet",
-    "Packagist", "RubyGems", "ConanCenter", "vcpkg", "SwiftURL",
+    "PyPI",
+    "npm",
+    "Go",
+    "crates.io",
+    "Maven",
+    "NuGet",
+    "Packagist",
+    "RubyGems",
+    "ConanCenter",
+    "vcpkg",
+    "SwiftURL",
 }
 OSV_ECOSYSTEMS_MEASURED_400 = {"SwiftPM", "CMake", "Conan"}
 
@@ -947,6 +952,7 @@ def _fake_osv(poison_names=(), vulnerable_names=(), calls=None, raise_exc=None):
     `poison_names` reproduit le comportement mesure de l'API : le lot ENTIER est
     rejete des qu'une seule de ses entrees est invalide.
     """
+
     def _urlopen(request, timeout=None):
         payload = _json.loads(request.data.decode("utf-8"))
         queries = payload["queries"]
@@ -1049,10 +1055,16 @@ class TestOsvBatchResilience:
             ("npm", "poison-pkg", "1.0.0"),
             ("npm", "express", "4.17.1"),
         ]
-        with patch.object(
-            urllib.request, "urlopen",
-            _fake_osv(poison_names={"poison-pkg"}, vulnerable_names={"gradio", "express"}, calls=calls),
-        ), patch("promptforge.security.fetch_vuln_details", _fake_details):
+        with (
+            patch.object(
+                urllib.request,
+                "urlopen",
+                _fake_osv(
+                    poison_names={"poison-pkg"}, vulnerable_names={"gradio", "express"}, calls=calls
+                ),
+            ),
+            patch("promptforge.security.fetch_vuln_details", _fake_details),
+        ):
             outcome = check_cve_osv_detailed(dependencies)
 
         assert {cve.package for cve in outcome.cves} == {"gradio", "express"}
@@ -1067,10 +1079,14 @@ class TestOsvBatchResilience:
             ("PyPI", "gradio", "4.0.0"),
             ("SwiftPM", "swift-nio", "2.0.0"),
         ]
-        with patch.object(
-            urllib.request, "urlopen",
-            _fake_osv(poison_names={"swift-nio"}, vulnerable_names={"gradio"}),
-        ), patch("promptforge.security.fetch_vuln_details", _fake_details):
+        with (
+            patch.object(
+                urllib.request,
+                "urlopen",
+                _fake_osv(poison_names={"swift-nio"}, vulnerable_names={"gradio"}),
+            ),
+            patch("promptforge.security.fetch_vuln_details", _fake_details),
+        ):
             outcome = check_cve_osv_detailed(dependencies)
 
         assert len(outcome.cves) == 1
@@ -1132,7 +1148,8 @@ class TestOsvFailureIsDistinctFromAbsence:
     def test_unreachable_api_is_reported_not_swallowed(self):
         dependencies = [("PyPI", "gradio", "4.0.0")]
         with patch.object(
-            urllib.request, "urlopen",
+            urllib.request,
+            "urlopen",
             _fake_osv(raise_exc=urllib.error.URLError("connexion refusee")),
         ):
             outcome = check_cve_osv_detailed(dependencies)
@@ -1176,6 +1193,7 @@ class TestOsvFailureIsDistinctFromAbsence:
 
     def test_truncated_response_is_a_failure_not_a_clean_bill(self):
         """Moins de resultats que de requetes : on ne devine pas l'appariement."""
+
         def _urlopen(request, timeout=None):
             return _FakeResponse({"results": [{}]})
 
@@ -1189,9 +1207,10 @@ class TestOsvFailureIsDistinctFromAbsence:
 
     def test_lost_vulnerability_details_are_reported(self):
         """Une vulnerabilite trouvee puis non detaillee ne doit pas disparaitre."""
-        with patch.object(
-            urllib.request, "urlopen", _fake_osv(vulnerable_names={"gradio"})
-        ), patch("promptforge.security.fetch_vuln_details", lambda vuln_id: None):
+        with (
+            patch.object(urllib.request, "urlopen", _fake_osv(vulnerable_names={"gradio"})),
+            patch("promptforge.security.fetch_vuln_details", lambda vuln_id: None),
+        ):
             outcome = check_cve_osv_detailed([("PyPI", "gradio", "4.0.0")])
 
         assert outcome.cves == []
@@ -1206,10 +1225,11 @@ class TestOsvFailureIsDistinctFromAbsence:
         aussi etre filtre. Mesure du 2026-09-04 sur `PyPI/pytest 8.3.4` :
         CVE-2025-71176 rendue deux fois avant ce filtre.
         """
+
         def _urlopen(request, timeout=None):
-            return _FakeResponse({
-                "results": [{"vulns": [{"id": "GHSA-aaaa"}, {"id": "PYSEC-bbbb"}]}]
-            })
+            return _FakeResponse(
+                {"results": [{"vulns": [{"id": "GHSA-aaaa"}, {"id": "PYSEC-bbbb"}]}]}
+            )
 
         def _details(vuln_id):
             return {
@@ -1221,8 +1241,9 @@ class TestOsvFailureIsDistinctFromAbsence:
                 "references": [],
             }
 
-        with patch.object(urllib.request, "urlopen", _urlopen), patch(
-            "promptforge.security.fetch_vuln_details", _details
+        with (
+            patch.object(urllib.request, "urlopen", _urlopen),
+            patch("promptforge.security.fetch_vuln_details", _details),
         ):
             outcome = check_cve_osv_detailed([("PyPI", "pytest", "8.3.4")])
 
@@ -1235,9 +1256,10 @@ class TestOsvFailureIsDistinctFromAbsence:
         lui-meme et supprimerait toutes les vulnerabilites non aliasees, qui
         sont la majorite des avis GHSA recents.
         """
-        with patch.object(
-            urllib.request, "urlopen", _fake_osv(vulnerable_names={"gradio"})
-        ), patch("promptforge.security.fetch_vuln_details", _fake_details):
+        with (
+            patch.object(urllib.request, "urlopen", _fake_osv(vulnerable_names={"gradio"})),
+            patch("promptforge.security.fetch_vuln_details", _fake_details),
+        ):
             outcome = check_cve_osv_detailed([("PyPI", "gradio", "4.0.0")])
 
         assert [cve.id for cve in outcome.cves] == ["GHSA-fake-gradio"]
@@ -1259,9 +1281,10 @@ class TestOsvFailureIsDistinctFromAbsence:
 
     def test_compat_wrapper_still_returns_a_plain_list(self):
         """`check_cve_osv` garde sa signature pour ses appelants existants."""
-        with patch.object(
-            urllib.request, "urlopen", _fake_osv(vulnerable_names={"gradio"})
-        ), patch("promptforge.security.fetch_vuln_details", _fake_details):
+        with (
+            patch.object(urllib.request, "urlopen", _fake_osv(vulnerable_names={"gradio"})),
+            patch("promptforge.security.fetch_vuln_details", _fake_details),
+        ):
             cves = check_cve_osv([("PyPI", "gradio", "4.0.0")])
 
         assert isinstance(cves, list)
@@ -1283,6 +1306,7 @@ class TestCveCheckOutcomeSummary:
         assert message.startswith(CVE_CHECK_INCOMPLETE_PREFIX)
         assert "PyPI" in message
         assert "OSV.dev injoignable" in message
+
 
 if __name__ == "__main__":
     # Run with: python -m pytest tests/test_security.py -v

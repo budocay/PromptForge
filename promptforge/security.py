@@ -9,11 +9,10 @@ Provides security-focused features for development prompts:
 """
 
 import json
-import urllib.request
-import urllib.error
 import re
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
-from typing import Optional
 from pathlib import Path
 
 from .logging_config import get_logger
@@ -27,7 +26,17 @@ logger = get_logger(__name__)
 # Programming languages keywords
 DEV_LANGUAGES = {
     "python": ["python", "py", "pip", "django", "flask", "fastapi", "pytorch", "pandas"],
-    "javascript": ["javascript", "js", "node", "nodejs", "npm", "react", "vue", "angular", "express"],
+    "javascript": [
+        "javascript",
+        "js",
+        "node",
+        "nodejs",
+        "npm",
+        "react",
+        "vue",
+        "angular",
+        "express",
+    ],
     "typescript": ["typescript", "ts", "tsx", "deno", "bun"],
     "rust": ["rust", "cargo", "tokio", "actix", "axum", "warp"],
     "go": ["golang", "go ", "gin", "fiber", "echo"],
@@ -41,22 +50,76 @@ DEV_LANGUAGES = {
 # Security-sensitive keywords that trigger security mode
 SECURITY_KEYWORDS = [
     # Auth & Identity
-    "auth", "authentication", "authorization", "login", "password", "jwt", "token",
-    "oauth", "session", "cookie", "credentials", "api key", "secret",
+    "auth",
+    "authentication",
+    "authorization",
+    "login",
+    "password",
+    "jwt",
+    "token",
+    "oauth",
+    "session",
+    "cookie",
+    "credentials",
+    "api key",
+    "secret",
     # Data
-    "database", "sql", "query", "insert", "update", "delete", "select",
-    "mongodb", "postgresql", "mysql", "redis", "elasticsearch",
+    "database",
+    "sql",
+    "query",
+    "insert",
+    "update",
+    "delete",
+    "select",
+    "mongodb",
+    "postgresql",
+    "mysql",
+    "redis",
+    "elasticsearch",
     # Network
-    "api", "endpoint", "route", "http", "https", "request", "response",
-    "webhook", "websocket", "cors", "proxy",
+    "api",
+    "endpoint",
+    "route",
+    "http",
+    "https",
+    "request",
+    "response",
+    "webhook",
+    "websocket",
+    "cors",
+    "proxy",
     # File & System
-    "file", "upload", "download", "path", "command", "shell",
-    "process", "subprocess", "system",
+    "file",
+    "upload",
+    "download",
+    "path",
+    "command",
+    "shell",
+    "process",
+    "subprocess",
+    "system",
     # Crypto
-    "encrypt", "decrypt", "hash", "bcrypt", "argon", "crypto", "ssl", "tls",
+    "encrypt",
+    "decrypt",
+    "hash",
+    "bcrypt",
+    "argon",
+    "crypto",
+    "ssl",
+    "tls",
     # Input/Output
-    "input", "form", "validate", "sanitize", "escape", "encode", "decode",
-    "serialize", "deserialize", "yaml", "xml", "json",
+    "input",
+    "form",
+    "validate",
+    "sanitize",
+    "escape",
+    "encode",
+    "decode",
+    "serialize",
+    "deserialize",
+    "yaml",
+    "xml",
+    "json",
 ]
 
 # OWASP Top 10 2021 categories
@@ -78,21 +141,24 @@ OWASP_TOP_10 = {
 # DATA CLASSES
 # =============================================================================
 
+
 @dataclass
 class CVEInfo:
     """Information about a CVE vulnerability."""
+
     id: str
     summary: str
     severity: str  # LOW, MEDIUM, HIGH, CRITICAL
     package: str
     affected_versions: str
-    fixed_version: Optional[str] = None
+    fixed_version: str | None = None
     references: list[str] = field(default_factory=list)
 
 
 @dataclass
 class SecurityContext:
     """Security context detected from prompt or project."""
+
     is_dev: bool = False
     languages: list[str] = field(default_factory=list)
     security_keywords_found: list[str] = field(default_factory=list)
@@ -103,6 +169,7 @@ class SecurityContext:
 @dataclass
 class SecretFinding:
     """A detected secret or sensitive data."""
+
     secret_type: str  # api_key, password, token, private_key, etc.
     file_path: str
     line_number: int
@@ -128,55 +195,115 @@ SECRET_PATTERNS = [
         "CRITICAL",
         "Utilisez AWS IAM roles ou AWS Secrets Manager au lieu de credentials en dur",
     ),
-    ("AWS Secret Access Key", r'(?:AWS|aws)?_?(?:SECRET|secret)?_?(?:ACCESS|access)?_?(?:KEY|key)\s*[=:]\s*["\']?([A-Za-z0-9/+=]{40})["\']?', "CRITICAL",
-     "Ne jamais commiter les AWS secret keys. Utilisez des variables d'environnement securisees"),
-
+    (
+        "AWS Secret Access Key",
+        r'(?:AWS|aws)?_?(?:SECRET|secret)?_?(?:ACCESS|access)?_?(?:KEY|key)\s*[=:]\s*["\']?([A-Za-z0-9/+=]{40})["\']?',
+        "CRITICAL",
+        "Ne jamais commiter les AWS secret keys. Utilisez des variables d'environnement securisees",
+    ),
     # Google Cloud
-    ("Google API Key", r'(?:GOOGLE|google)?_?(?:API|api)?_?(?:KEY|key)\s*[=:]\s*["\']?(AIza[0-9A-Za-z\-_]{35})["\']?', "HIGH",
-     "Restreignez cette cle API dans Google Cloud Console et utilisez des secrets managers"),
-    ("Google OAuth Client Secret", r'(?:client_secret|CLIENT_SECRET)\s*[=:]\s*["\']?([a-zA-Z0-9_-]{24})["\']?', "HIGH",
-     "Ne jamais exposer les OAuth client secrets. Utilisez des variables d'environnement"),
-
+    (
+        "Google API Key",
+        r'(?:GOOGLE|google)?_?(?:API|api)?_?(?:KEY|key)\s*[=:]\s*["\']?(AIza[0-9A-Za-z\-_]{35})["\']?',
+        "HIGH",
+        "Restreignez cette cle API dans Google Cloud Console et utilisez des secrets managers",
+    ),
+    (
+        "Google OAuth Client Secret",
+        r'(?:client_secret|CLIENT_SECRET)\s*[=:]\s*["\']?([a-zA-Z0-9_-]{24})["\']?',
+        "HIGH",
+        "Ne jamais exposer les OAuth client secrets. Utilisez des variables d'environnement",
+    ),
     # OpenAI / Anthropic / LLM APIs
-    ("OpenAI API Key", r'(?:OPENAI|openai)?_?(?:API|api)?_?(?:KEY|key)\s*[=:]\s*["\']?(sk-(?:proj-)?[a-zA-Z0-9]{20,})["\']?', "CRITICAL",
-     "Cle OpenAI detectee! Risque de facturation non autorisee. Regenerez cette cle immediatement"),
-    ("Anthropic API Key", r'(?:ANTHROPIC|anthropic)?_?(?:API|api)?_?(?:KEY|key)\s*[=:]\s*["\']?(sk-ant-[a-zA-Z0-9\-]{20,})["\']?', "CRITICAL",
-     "Cle Anthropic detectee! Regenerez cette cle et utilisez des variables d'environnement"),
-
+    (
+        "OpenAI API Key",
+        r'(?:OPENAI|openai)?_?(?:API|api)?_?(?:KEY|key)\s*[=:]\s*["\']?(sk-(?:proj-)?[a-zA-Z0-9]{20,})["\']?',
+        "CRITICAL",
+        "Cle OpenAI detectee! Risque de facturation non autorisee. Regenerez cette cle immediatement",
+    ),
+    (
+        "Anthropic API Key",
+        r'(?:ANTHROPIC|anthropic)?_?(?:API|api)?_?(?:KEY|key)\s*[=:]\s*["\']?(sk-ant-[a-zA-Z0-9\-]{20,})["\']?',
+        "CRITICAL",
+        "Cle Anthropic detectee! Regenerez cette cle et utilisez des variables d'environnement",
+    ),
     # Stripe
-    ("Stripe Secret Key", r'(?:STRIPE|stripe)?_?(?:SECRET|secret)?_?(?:KEY|key)\s*[=:]\s*["\']?(sk_live_[a-zA-Z0-9]{24,})["\']?', "CRITICAL",
-     "Cle Stripe LIVE detectee! Risque de fraude financiere. Regenerez immediatement"),
-    ("Stripe Publishable Key", r'(?:STRIPE|stripe)?_?(?:PUBLISHABLE|publishable)?_?(?:KEY|key)\s*[=:]\s*["\']?(pk_live_[a-zA-Z0-9]{24,})["\']?', "HIGH",
-     "Cle Stripe publishable en production. Verifiez que c'est intentionnel"),
-
+    (
+        "Stripe Secret Key",
+        r'(?:STRIPE|stripe)?_?(?:SECRET|secret)?_?(?:KEY|key)\s*[=:]\s*["\']?(sk_live_[a-zA-Z0-9]{24,})["\']?',
+        "CRITICAL",
+        "Cle Stripe LIVE detectee! Risque de fraude financiere. Regenerez immediatement",
+    ),
+    (
+        "Stripe Publishable Key",
+        r'(?:STRIPE|stripe)?_?(?:PUBLISHABLE|publishable)?_?(?:KEY|key)\s*[=:]\s*["\']?(pk_live_[a-zA-Z0-9]{24,})["\']?',
+        "HIGH",
+        "Cle Stripe publishable en production. Verifiez que c'est intentionnel",
+    ),
     # Database
-    ("Database URL with Password", r'(?:DATABASE_URL|DB_URL|MONGO_URI|POSTGRES_URL|MYSQL_URL)\s*[=:]\s*["\']?([a-z]+://[^:]+:[^@]+@[^\s"\']+)["\']?', "CRITICAL",
-     "URL de base de donnees avec credentials en clair. Utilisez des secrets managers"),
-    ("Database Password", r'(?:DB_PASS(?:WORD)?|DATABASE_PASS(?:WORD)?|POSTGRES_PASSWORD|MYSQL_PASSWORD|MONGO_PASSWORD)\s*[=:]\s*["\']?([^\s"\']{8,})["\']?', "CRITICAL",
-     "Mot de passe de base de donnees en clair. Ne jamais commiter!"),
-
+    (
+        "Database URL with Password",
+        r'(?:DATABASE_URL|DB_URL|MONGO_URI|POSTGRES_URL|MYSQL_URL)\s*[=:]\s*["\']?([a-z]+://[^:]+:[^@]+@[^\s"\']+)["\']?',
+        "CRITICAL",
+        "URL de base de donnees avec credentials en clair. Utilisez des secrets managers",
+    ),
+    (
+        "Database Password",
+        r'(?:DB_PASS(?:WORD)?|DATABASE_PASS(?:WORD)?|POSTGRES_PASSWORD|MYSQL_PASSWORD|MONGO_PASSWORD)\s*[=:]\s*["\']?([^\s"\']{8,})["\']?',
+        "CRITICAL",
+        "Mot de passe de base de donnees en clair. Ne jamais commiter!",
+    ),
     # Generic Secrets
-    ("Generic API Key", r'(?:API_KEY|APIKEY|api_key|apikey)\s*[=:]\s*["\']?([a-zA-Z0-9_\-]{20,})["\']?', "HIGH",
-     "Cle API detectee. Utilisez des variables d'environnement ou un secrets manager"),
-    ("Generic Secret", r'(?:SECRET|secret)(?:_KEY|_TOKEN)?\s*[=:]\s*["\']?([a-zA-Z0-9_\-]{16,})["\']?', "HIGH",
-     "Secret en clair detecte. Utilisez des variables d'environnement securisees"),
-    ("Generic Password", r'(?:PASSWORD|PASSWD|PWD|pass(?:word)?)\s*[=:]\s*["\']?([^\s"\']{8,})["\']?', "HIGH",
-     "Mot de passe en clair detecte. Ne jamais stocker de mots de passe dans le code"),
-
+    (
+        "Generic API Key",
+        r'(?:API_KEY|APIKEY|api_key|apikey)\s*[=:]\s*["\']?([a-zA-Z0-9_\-]{20,})["\']?',
+        "HIGH",
+        "Cle API detectee. Utilisez des variables d'environnement ou un secrets manager",
+    ),
+    (
+        "Generic Secret",
+        r'(?:SECRET|secret)(?:_KEY|_TOKEN)?\s*[=:]\s*["\']?([a-zA-Z0-9_\-]{16,})["\']?',
+        "HIGH",
+        "Secret en clair detecte. Utilisez des variables d'environnement securisees",
+    ),
+    (
+        "Generic Password",
+        r'(?:PASSWORD|PASSWD|PWD|pass(?:word)?)\s*[=:]\s*["\']?([^\s"\']{8,})["\']?',
+        "HIGH",
+        "Mot de passe en clair detecte. Ne jamais stocker de mots de passe dans le code",
+    ),
     # Tokens
-    ("JWT Token", r'(?:JWT|jwt|token|TOKEN)\s*[=:]\s*["\']?(eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*)["\']?', "HIGH",
-     "JWT token en dur detecte. Les tokens doivent etre generes dynamiquement"),
-    ("Bearer Token", r'(?:BEARER|bearer|AUTH|auth)(?:_TOKEN|_token)?\s*[=:]\s*["\']?([a-zA-Z0-9_\-]{32,})["\']?', "HIGH",
-     "Token d'authentification en clair. Utilisez un gestionnaire de secrets"),
-
+    (
+        "JWT Token",
+        r'(?:JWT|jwt|token|TOKEN)\s*[=:]\s*["\']?(eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*)["\']?',
+        "HIGH",
+        "JWT token en dur detecte. Les tokens doivent etre generes dynamiquement",
+    ),
+    (
+        "Bearer Token",
+        r'(?:BEARER|bearer|AUTH|auth)(?:_TOKEN|_token)?\s*[=:]\s*["\']?([a-zA-Z0-9_\-]{32,})["\']?',
+        "HIGH",
+        "Token d'authentification en clair. Utilisez un gestionnaire de secrets",
+    ),
     # Private Keys
-    ("RSA Private Key", r'-----BEGIN (?:RSA )?PRIVATE KEY-----', "CRITICAL",
-     "Cle privee RSA detectee! Ne JAMAIS commiter de cles privees. Utilisez un vault"),
-    ("SSH Private Key", r'-----BEGIN OPENSSH PRIVATE KEY-----', "CRITICAL",
-     "Cle privee SSH detectee! Regenerez cette cle et ne la commitez jamais"),
-    ("PGP Private Key", r'-----BEGIN PGP PRIVATE KEY BLOCK-----', "CRITICAL",
-     "Cle privee PGP detectee! Ne jamais exposer de cles privees"),
-
+    (
+        "RSA Private Key",
+        r"-----BEGIN (?:RSA )?PRIVATE KEY-----",
+        "CRITICAL",
+        "Cle privee RSA detectee! Ne JAMAIS commiter de cles privees. Utilisez un vault",
+    ),
+    (
+        "SSH Private Key",
+        r"-----BEGIN OPENSSH PRIVATE KEY-----",
+        "CRITICAL",
+        "Cle privee SSH detectee! Regenerez cette cle et ne la commitez jamais",
+    ),
+    (
+        "PGP Private Key",
+        r"-----BEGIN PGP PRIVATE KEY BLOCK-----",
+        "CRITICAL",
+        "Cle privee PGP detectee! Ne jamais exposer de cles privees",
+    ),
     # GitHub / GitLab
     # Longueurs volontairement exactes et bornees a droite par un lookahead.
     # PAT classique : prefixe `ghp_` puis 36 caracteres (30 de donnees aleatoires
@@ -203,51 +330,112 @@ SECRET_PATTERNS = [
         "CRITICAL",
         "Token GitHub detecte! Revoquez ce token dans les settings GitHub",
     ),
-    ("GitLab Token", r'(?:GITLAB|gitlab)(?:_TOKEN|_token)?\s*[=:]\s*["\']?(glpat-[a-zA-Z0-9\-]{20})["\']?', "CRITICAL",
-     "Token GitLab detecte! Revoquez ce token dans les settings GitLab"),
-
+    (
+        "GitLab Token",
+        r'(?:GITLAB|gitlab)(?:_TOKEN|_token)?\s*[=:]\s*["\']?(glpat-[a-zA-Z0-9\-]{20})["\']?',
+        "CRITICAL",
+        "Token GitLab detecte! Revoquez ce token dans les settings GitLab",
+    ),
     # Slack / Discord
-    ("Slack Token", r'(?:SLACK|slack)(?:_TOKEN|_token|_WEBHOOK)?\s*[=:]\s*["\']?(xox[baprs]-[a-zA-Z0-9\-]+)["\']?', "HIGH",
-     "Token Slack detecte. Regenerez ce token dans les settings Slack"),
-    ("Discord Webhook", r'(?:DISCORD|discord)(?:_WEBHOOK|_webhook)?\s*[=:]\s*["\']?(https://discord(?:app)?\.com/api/webhooks/[0-9]+/[a-zA-Z0-9_\-]+)["\']?', "HIGH",
-     "Webhook Discord detecte. Les webhooks peuvent etre abuses pour du spam"),
-
+    (
+        "Slack Token",
+        r'(?:SLACK|slack)(?:_TOKEN|_token|_WEBHOOK)?\s*[=:]\s*["\']?(xox[baprs]-[a-zA-Z0-9\-]+)["\']?',
+        "HIGH",
+        "Token Slack detecte. Regenerez ce token dans les settings Slack",
+    ),
+    (
+        "Discord Webhook",
+        r'(?:DISCORD|discord)(?:_WEBHOOK|_webhook)?\s*[=:]\s*["\']?(https://discord(?:app)?\.com/api/webhooks/[0-9]+/[a-zA-Z0-9_\-]+)["\']?',
+        "HIGH",
+        "Webhook Discord detecte. Les webhooks peuvent etre abuses pour du spam",
+    ),
     # SendGrid / Mailgun / Email
-    ("SendGrid API Key", r'(?:SENDGRID|sendgrid)(?:_API)?(?:_KEY|_key)?\s*[=:]\s*["\']?(SG\.[a-zA-Z0-9_\-]{22}\.[a-zA-Z0-9_\-]{43})["\']?', "HIGH",
-     "Cle SendGrid detectee. Risque d'envoi de spam. Utilisez des IP whitelists"),
-
+    (
+        "SendGrid API Key",
+        r'(?:SENDGRID|sendgrid)(?:_API)?(?:_KEY|_key)?\s*[=:]\s*["\']?(SG\.[a-zA-Z0-9_\-]{22}\.[a-zA-Z0-9_\-]{43})["\']?',
+        "HIGH",
+        "Cle SendGrid detectee. Risque d'envoi de spam. Utilisez des IP whitelists",
+    ),
     # Twilio
-    ("Twilio Auth Token", r'(?:TWILIO|twilio)(?:_AUTH)?(?:_TOKEN|_token)?\s*[=:]\s*["\']?([a-f0-9]{32})["\']?', "HIGH",
-     "Token Twilio detecte. Risque de facturation SMS non autorisee"),
-
+    (
+        "Twilio Auth Token",
+        r'(?:TWILIO|twilio)(?:_AUTH)?(?:_TOKEN|_token)?\s*[=:]\s*["\']?([a-f0-9]{32})["\']?',
+        "HIGH",
+        "Token Twilio detecte. Risque de facturation SMS non autorisee",
+    ),
     # Heroku
-    ("Heroku API Key", r'(?:HEROKU|heroku)(?:_API)?(?:_KEY|_key)?\s*[=:]\s*["\']?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})["\']?', "HIGH",
-     "Cle API Heroku detectee. Risque de modification d'infrastructure"),
+    (
+        "Heroku API Key",
+        r'(?:HEROKU|heroku)(?:_API)?(?:_KEY|_key)?\s*[=:]\s*["\']?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})["\']?',
+        "HIGH",
+        "Cle API Heroku detectee. Risque de modification d'infrastructure",
+    ),
 ]
 
 # Files to scan for secrets
 SECRET_SCAN_FILES = [
-    ".env", ".env.local", ".env.production", ".env.development", ".env.staging",
-    ".env.example", ".env.sample", ".env.template",
-    "config.py", "config.js", "config.ts", "config.json", "config.yaml", "config.yml",
-    "settings.py", "settings.json", "settings.yaml", "settings.yml",
-    "credentials.json", "credentials.yaml", "credentials.yml",
-    "secrets.json", "secrets.yaml", "secrets.yml",
-    "application.properties", "application.yml", "application.yaml",
-    "docker-compose.yml", "docker-compose.yaml",
-    ".npmrc", ".pypirc", ".netrc",
-    "Dockerfile", "dockerfile",
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".env.development",
+    ".env.staging",
+    ".env.example",
+    ".env.sample",
+    ".env.template",
+    "config.py",
+    "config.js",
+    "config.ts",
+    "config.json",
+    "config.yaml",
+    "config.yml",
+    "settings.py",
+    "settings.json",
+    "settings.yaml",
+    "settings.yml",
+    "credentials.json",
+    "credentials.yaml",
+    "credentials.yml",
+    "secrets.json",
+    "secrets.yaml",
+    "secrets.yml",
+    "application.properties",
+    "application.yml",
+    "application.yaml",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    ".npmrc",
+    ".pypirc",
+    ".netrc",
+    "Dockerfile",
+    "dockerfile",
 ]
 
 # File extensions to scan
 SECRET_SCAN_EXTENSIONS = [
-    ".env", ".ini", ".cfg", ".conf", ".config",
-    ".py", ".js", ".ts", ".jsx", ".tsx",
-    ".json", ".yaml", ".yml", ".toml",
-    ".properties", ".xml",
-    ".sh", ".bash", ".zsh",
+    ".env",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".config",
+    ".py",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".properties",
+    ".xml",
+    ".sh",
+    ".bash",
+    ".zsh",
     ".dockerfile",
-    ".pem", ".key", ".p12", ".pfx",  # Private key files
+    ".pem",
+    ".key",
+    ".p12",
+    ".pfx",  # Private key files
 ]
 
 
@@ -344,18 +532,20 @@ def scan_file_for_secrets(file_path: Path) -> list[SecretFinding]:
                         continue
 
                     # Extract key name from the line
-                    key_match = re.search(r'^([A-Z_][A-Z0-9_]*)\s*[=:]', line, re.IGNORECASE)
+                    key_match = re.search(r"^([A-Z_][A-Z0-9_]*)\s*[=:]", line, re.IGNORECASE)
                     key_name = key_match.group(1) if key_match else secret_name
 
-                    findings.append(SecretFinding(
-                        secret_type=secret_name,
-                        file_path=str(file_path),
-                        line_number=line_num,
-                        key_name=key_name,
-                        masked_value=mask_secret(secret_value),
-                        severity=severity,
-                        recommendation=recommendation
-                    ))
+                    findings.append(
+                        SecretFinding(
+                            secret_type=secret_name,
+                            file_path=str(file_path),
+                            line_number=line_num,
+                            key_name=key_name,
+                            masked_value=mask_secret(secret_value),
+                            severity=severity,
+                            recommendation=recommendation,
+                        )
+                    )
                     break  # One finding per line per pattern type
 
     except Exception as e:
@@ -396,7 +586,15 @@ def scan_directory_for_secrets(directory: Path, max_files: int = 1000) -> list[S
 
             # Skip node_modules, venv, .git, etc.
             path_str = str(file_path).lower()
-            skip_patterns = ["node_modules", "venv", ".venv", "__pycache__", ".git", "dist", "build"]
+            skip_patterns = [
+                "node_modules",
+                "venv",
+                ".venv",
+                "__pycache__",
+                ".git",
+                "dist",
+                "build",
+            ]
             if any(p in path_str for p in skip_patterns):
                 continue
 
@@ -416,7 +614,9 @@ def scan_directory_for_secrets(directory: Path, max_files: int = 1000) -> list[S
             seen.add(key)
             unique_findings.append(f)
 
-    logger.info(f"Secret scan: scanned {files_scanned} files, found {len(unique_findings)} potential secrets")
+    logger.info(
+        f"Secret scan: scanned {files_scanned} files, found {len(unique_findings)} potential secrets"
+    )
     return unique_findings
 
 
@@ -428,7 +628,9 @@ def format_secret_alerts(findings: list[SecretFinding]) -> str:
     lines = []
     lines.append("## ⚠️ ALERTE: Secrets Detectes")
     lines.append("")
-    lines.append("> **ATTENTION**: Des secrets et donnees sensibles ont ete detectes dans votre projet.")
+    lines.append(
+        "> **ATTENTION**: Des secrets et donnees sensibles ont ete detectes dans votre projet."
+    )
     lines.append("> Meme si votre environnement est local, ces donnees peuvent fuiter via:")
     lines.append("> - Les logs et historiques de conversation avec l'IA")
     lines.append("> - Les commits Git accidentels")
@@ -456,7 +658,9 @@ def format_secret_alerts(findings: list[SecretFinding]) -> str:
         lines.append("")
         for finding in high[:10]:  # Limit display
             rel_path = Path(finding.file_path).name
-            lines.append(f"- **{finding.key_name}** (`{finding.secret_type}`) dans `{rel_path}:{finding.line_number}`")
+            lines.append(
+                f"- **{finding.key_name}** (`{finding.secret_type}`) dans `{rel_path}:{finding.line_number}`"
+            )
         if len(high) > 10:
             lines.append(f"- ... et {len(high) - 10} autres")
         lines.append("")
@@ -483,6 +687,7 @@ def format_secret_alerts(findings: list[SecretFinding]) -> str:
 # =============================================================================
 # DEV CONTEXT DETECTION
 # =============================================================================
+
 
 def detect_dev_context(text: str) -> SecurityContext:
     """
@@ -525,24 +730,24 @@ def detect_dependencies_from_text(text: str) -> list[tuple[str, str, str]]:
     dependencies = []
 
     # Python: package==version or package>=version
-    python_pattern = r'([a-zA-Z0-9_-]+)\s*[=><]+\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)'
+    python_pattern = r"([a-zA-Z0-9_-]+)\s*[=><]+\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)"
     for match in re.finditer(python_pattern, text):
         pkg, version = match.groups()
-        if pkg.lower() not in ['python', 'pip', 'version']:
+        if pkg.lower() not in ["python", "pip", "version"]:
             dependencies.append(("PyPI", pkg, version))
 
     # npm: "package": "^version" or "package": "version"
     npm_pattern = r'"([a-zA-Z0-9@/_-]+)"\s*:\s*"[\^~]?([0-9]+\.[0-9]+(?:\.[0-9]+)?)'
     for match in re.finditer(npm_pattern, text):
         pkg, version = match.groups()
-        if not pkg.startswith('@types/'):
+        if not pkg.startswith("@types/"):
             dependencies.append(("npm", pkg, version))
 
     # Cargo.toml: package = "version"
     cargo_pattern = r'([a-zA-Z0-9_-]+)\s*=\s*"([0-9]+\.[0-9]+(?:\.[0-9]+)?)"'
     for match in re.finditer(cargo_pattern, text):
         pkg, version = match.groups()
-        if pkg not in ['version', 'edition', 'name']:
+        if pkg not in ["version", "edition", "name"]:
             dependencies.append(("crates.io", pkg, version))
 
     return dependencies
@@ -556,13 +761,13 @@ OSV_API_URL = "https://api.osv.dev/v1/querybatch"
 OSV_TIMEOUT = 10
 
 
-def fetch_vuln_details(vuln_id: str) -> Optional[dict]:
+def fetch_vuln_details(vuln_id: str) -> dict | None:
     """Fetch full vulnerability details from OSV.dev."""
     try:
         url = f"https://api.osv.dev/v1/vulns/{vuln_id}"
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=5) as response:
-            return json.loads(response.read().decode('utf-8'))
+            return json.loads(response.read().decode("utf-8"))
     except Exception:
         return None
 
@@ -615,10 +820,21 @@ OSV_ECOSYSTEM_ALIASES = {
     "Conan": "ConanCenter",
 }
 
-OSV_SUPPORTED_ECOSYSTEMS = frozenset({
-    "PyPI", "npm", "Go", "crates.io", "Maven", "NuGet",
-    "Packagist", "RubyGems", "ConanCenter", "vcpkg", "SwiftURL",
-})
+OSV_SUPPORTED_ECOSYSTEMS = frozenset(
+    {
+        "PyPI",
+        "npm",
+        "Go",
+        "crates.io",
+        "Maven",
+        "NuGet",
+        "Packagist",
+        "RubyGems",
+        "ConanCenter",
+        "vcpkg",
+        "SwiftURL",
+    }
+)
 
 # `CMake` n'a pas d'equivalent OSV et n'en aura pas : ce n'est pas un index de
 # paquets mais un systeme de construction. Les dependances lues dans un
@@ -771,9 +987,7 @@ def _collect_vulns(
             if not full_vuln:
                 # Une vulnerabilite trouvee puis perdue faute de details est un
                 # faux negatif : elle doit se voir, pas disparaitre.
-                outcome.errors.append(
-                    f"details indisponibles pour {vuln_id} ({package})"
-                )
+                outcome.errors.append(f"details indisponibles pour {vuln_id} ({package})")
                 continue
             cve = parse_osv_vulnerability(full_vuln, package)
             if not cve:
@@ -826,9 +1040,7 @@ def _osv_query_resilient(
         outcome.errors.append(
             f"OSV.dev a repondu HTTP {error.code} sur {len(chunk)} paquet(s){detail}"
         )
-        logger.warning(
-            "OSV.dev HTTP %s sur %s paquet(s)%s", error.code, len(chunk), detail
-        )
+        logger.warning("OSV.dev HTTP %s sur %s paquet(s)%s", error.code, len(chunk), detail)
         return
     except urllib.error.URLError as error:
         outcome.failed.extend(chunk)
@@ -866,9 +1078,7 @@ def _read_http_error_body(error: urllib.error.HTTPError) -> str:
     return f" : {body[:200]}" if body else ""
 
 
-def check_cve_osv_detailed(
-    dependencies: list[tuple[str, str, str]]
-) -> CVECheckOutcome:
+def check_cve_osv_detailed(dependencies: list[tuple[str, str, str]]) -> CVECheckOutcome:
     """Verifie des dependances aupres d'OSV.dev en distinguant echec et absence.
 
     Args:
@@ -927,7 +1137,7 @@ def check_cve_osv(dependencies: list[tuple[str, str, str]]) -> list[CVEInfo]:
     return check_cve_osv_detailed(dependencies).cves
 
 
-def parse_osv_vulnerability(vuln: dict, package: str) -> Optional[CVEInfo]:
+def parse_osv_vulnerability(vuln: dict, package: str) -> CVEInfo | None:
     """Parse OSV vulnerability response into CVEInfo."""
     try:
         vuln_id = vuln.get("id", "")
@@ -972,7 +1182,9 @@ def parse_osv_vulnerability(vuln: dict, package: str) -> Optional[CVEInfo]:
                                 break
                     versions = affected.get("versions", [])
                     if versions:
-                        affected_str = f"{versions[0]} - {versions[-1]}" if len(versions) > 1 else versions[0]
+                        affected_str = (
+                            f"{versions[0]} - {versions[-1]}" if len(versions) > 1 else versions[0]
+                        )
 
         references = [ref.get("url", "") for ref in vuln.get("references", [])[:3]]
 
@@ -983,7 +1195,7 @@ def parse_osv_vulnerability(vuln: dict, package: str) -> Optional[CVEInfo]:
             package=package,
             affected_versions=affected_str,
             fixed_version=fixed_version,
-            references=references
+            references=references,
         )
     except Exception as e:
         logger.warning(f"Error parsing vulnerability: {e}")
@@ -998,6 +1210,7 @@ def check_package_cve(package: str, version: str, ecosystem: str = "PyPI") -> li
 # =============================================================================
 # SECURITY GUIDELINES
 # =============================================================================
+
 
 def get_security_guidelines(context: SecurityContext) -> str:
     """Generate security guidelines based on detected context."""
@@ -1088,7 +1301,9 @@ def get_security_guidelines(context: SecurityContext) -> str:
 - Activer les protections: -fstack-protector, -D_FORTIFY_SOURCE=2, -fPIE
 - AddressSanitizer et MemorySanitizer pour detecter les erreurs memoire""")
 
-    if any(k in context.security_keywords_found for k in ["auth", "login", "password", "jwt", "token"]):
+    if any(
+        k in context.security_keywords_found for k in ["auth", "login", "password", "jwt", "token"]
+    ):
         lines.append("""### Authentification
 - Implementer rate limiting sur les endpoints d'auth
 - Utiliser HTTPS uniquement
@@ -1168,7 +1383,12 @@ def get_security_guidelines(context: SecurityContext) -> str:
     if context.cves:
         lines.append("\n### VULNERABILITES DETECTEES (CVE)")
         for cve in context.cves[:5]:
-            sev_tag = {"CRITICAL": "[CRIT]", "HIGH": "[HIGH]", "MEDIUM": "[MED]", "LOW": "[LOW]"}.get(cve.severity, "[?]")
+            sev_tag = {
+                "CRITICAL": "[CRIT]",
+                "HIGH": "[HIGH]",
+                "MEDIUM": "[MED]",
+                "LOW": "[LOW]",
+            }.get(cve.severity, "[?]")
             lines.append(f"\n**{sev_tag} {cve.id}** - {cve.package}")
             lines.append(f"- Severite: {cve.severity}")
             lines.append(f"- {cve.summary[:150]}...")
@@ -1210,10 +1430,9 @@ Tu generes du code qui sera utilise en production. La securite est CRITIQUE.
 # INTEGRATION HELPERS
 # =============================================================================
 
+
 def enrich_prompt_with_security(
-    raw_prompt: str,
-    project_context: str = "",
-    check_cves: bool = True
+    raw_prompt: str, project_context: str = "", check_cves: bool = True
 ) -> tuple[str, SecurityContext]:
     """Analyze prompt and project, add security context if dev-related."""
     full_text = f"{raw_prompt}\n{project_context}"

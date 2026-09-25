@@ -2,24 +2,25 @@
 Tests pour le module providers (Ollama).
 """
 
-import pytest
 import json
-from unittest.mock import patch, MagicMock
-from urllib.error import URLError, HTTPError
+from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError, URLError
+
+import pytest
 
 from promptforge.providers import (
-    OllamaProvider,
-    OllamaConfig,
-    OllamaError,
-    OllamaModelNotFoundError,
-    OllamaTimeoutError,
     DEFAULT_OLLAMA_MODEL,
     DEFAULT_OLLAMA_TIMEOUT,
     OLLAMA_TIMEOUT_ENV_VAR,
+    REFORMAT_SYSTEM_PROMPT,
+    OllamaConfig,
+    OllamaError,
+    OllamaModelNotFoundError,
+    OllamaProvider,
+    OllamaTimeoutError,
     build_timeout_message,
-    get_default_ollama_timeout,
     format_prompt_with_ollama,
-    REFORMAT_SYSTEM_PROMPT
+    get_default_ollama_timeout,
 )
 
 
@@ -42,12 +43,8 @@ class TestOllamaConfig:
 
     def test_custom_values(self):
         """Test des valeurs personnalisées."""
-        config = OllamaConfig(
-            base_url="http://custom:8080",
-            model="mistral",
-            timeout=60
-        )
-        
+        config = OllamaConfig(base_url="http://custom:8080", model="mistral", timeout=60)
+
         assert config.base_url == "http://custom:8080"
         assert config.model == "mistral"
         assert config.timeout == 60
@@ -59,7 +56,7 @@ class TestOllamaProvider:
     def test_init_default_config(self):
         """Test de l'initialisation avec config par défaut."""
         provider = OllamaProvider()
-        
+
         assert provider.config.base_url == "http://localhost:11434"
         assert provider.config.model == DEFAULT_OLLAMA_MODEL
 
@@ -67,10 +64,10 @@ class TestOllamaProvider:
         """Test de l'initialisation avec config personnalisée."""
         config = OllamaConfig(model="mistral")
         provider = OllamaProvider(config)
-        
+
         assert provider.config.model == "mistral"
 
-    @patch('urllib.request.urlopen')
+    @patch("urllib.request.urlopen")
     def test_is_available_success(self, mock_urlopen):
         """Test de disponibilité quand Ollama répond."""
         mock_response = MagicMock()
@@ -78,84 +75,81 @@ class TestOllamaProvider:
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
         mock_urlopen.return_value = mock_response
-        
-        provider = OllamaProvider()
-        assert provider.is_available() == True
 
-    @patch('urllib.request.urlopen')
+        provider = OllamaProvider()
+        assert provider.is_available()
+
+    @patch("urllib.request.urlopen")
     def test_is_available_failure(self, mock_urlopen):
         """Test de disponibilité quand Ollama ne répond pas."""
         mock_urlopen.side_effect = URLError("Connection refused")
-        
-        provider = OllamaProvider()
-        assert provider.is_available() == False
 
-    @patch('urllib.request.urlopen')
+        provider = OllamaProvider()
+        assert not provider.is_available()
+
+    @patch("urllib.request.urlopen")
     def test_list_models_success(self, mock_urlopen):
         """Test de la liste des modèles."""
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({
-            "models": [
-                {"name": "llama3.1:latest"},
-                {"name": "mistral:latest"}
-            ]
-        }).encode()
+        mock_response.read.return_value = json.dumps(
+            {"models": [{"name": "llama3.1:latest"}, {"name": "mistral:latest"}]}
+        ).encode()
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
         mock_urlopen.return_value = mock_response
-        
+
         provider = OllamaProvider()
         models = provider.list_models()
-        
+
         assert len(models) == 2
         assert "llama3.1:latest" in models
         assert "mistral:latest" in models
 
-    @patch('urllib.request.urlopen')
+    @patch("urllib.request.urlopen")
     def test_list_models_failure(self, mock_urlopen):
         """Test de la liste des modèles en cas d'erreur."""
         mock_urlopen.side_effect = URLError("Connection refused")
-        
+
         provider = OllamaProvider()
         models = provider.list_models()
-        
+
         assert models == []
 
-    @patch('urllib.request.urlopen')
+    @patch("urllib.request.urlopen")
     def test_generate_success(self, mock_urlopen):
         """Test de génération de texte."""
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({
-            "response": "Generated text response"
-        }).encode()
+        mock_response.read.return_value = json.dumps(
+            {"response": "Generated text response"}
+        ).encode()
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
         mock_urlopen.return_value = mock_response
-        
+
         provider = OllamaProvider()
         result = provider.generate("Test prompt", "System prompt")
-        
+
         assert result == "Generated text response"
-        
+
         # Vérifier l'appel
         call_args = mock_urlopen.call_args
         request = call_args[0][0]
         assert request.full_url == "http://localhost:11434/api/generate"
-        
+
         # Vérifier le payload
         payload = json.loads(request.data.decode())
         assert payload["model"] == DEFAULT_OLLAMA_MODEL
         assert payload["prompt"] == "Test prompt"
         assert payload["system"] == "System prompt"
 
-    @patch('urllib.request.urlopen')
+    @patch("urllib.request.urlopen")
     def test_generate_failure(self, mock_urlopen):
         """Test de génération en cas d'erreur."""
         mock_urlopen.side_effect = URLError("Connection refused")
-        
+
         provider = OllamaProvider()
         result = provider.generate("Test prompt")
-        
+
         assert result is None
 
 
@@ -178,7 +172,7 @@ class TestFormatPromptWithOllama:
         result = format_prompt_with_ollama(
             raw_prompt="create user route",
             project_context=sample_config_content,
-            provider=mock_ollama_available
+            provider=mock_ollama_available,
         )
 
         assert result is not None
@@ -197,9 +191,9 @@ class TestFormatPromptWithOllama:
         result = format_prompt_with_ollama(
             raw_prompt="create user route",
             project_context=sample_config_content,
-            provider=mock_ollama_unavailable
+            provider=mock_ollama_unavailable,
         )
-        
+
         assert result is None
 
     def test_system_prompt_exists(self):
@@ -341,7 +335,7 @@ class TestTimeoutMessage:
 class TestGenerateTimeout:
     """`generate()` face au depassement de delai."""
 
-    @patch('urllib.request.urlopen')
+    @patch("urllib.request.urlopen")
     def test_read_timeout_raises_typed_error(self, mock_urlopen):
         """Depassement a la LECTURE : urllib remonte un `TimeoutError` nu."""
         mock_urlopen.side_effect = TimeoutError("timed out")
@@ -354,7 +348,7 @@ class TestGenerateTimeout:
         assert excinfo.value.model == "qwen3:14b"
         assert excinfo.value.timeout == 42
 
-    @patch('urllib.request.urlopen')
+    @patch("urllib.request.urlopen")
     def test_connect_timeout_wrapped_in_urlerror_raises_typed_error(self, mock_urlopen):
         """Depassement a la CONNEXION : urllib l'emballe dans URLError.
 
@@ -371,7 +365,7 @@ class TestGenerateTimeout:
 
         assert excinfo.value.timeout == 7
 
-    @patch('urllib.request.urlopen')
+    @patch("urllib.request.urlopen")
     def test_network_failure_still_returns_none(self, mock_urlopen):
         """Contrat inchange : un echec reseau reste un None, pas une exception."""
         mock_urlopen.side_effect = URLError("Connection refused")
@@ -379,23 +373,29 @@ class TestGenerateTimeout:
         provider = OllamaProvider()
         assert provider.generate("Test prompt") is None
 
-    @patch('urllib.request.urlopen')
+    @patch("urllib.request.urlopen")
     def test_http_error_still_returns_none(self, mock_urlopen):
         """Contrat inchange : une reponse HTTP en erreur reste un None."""
         mock_urlopen.side_effect = HTTPError(
             url="http://localhost:11434/api/generate",
-            code=500, msg="Internal Server Error", hdrs=None, fp=None,
+            code=500,
+            msg="Internal Server Error",
+            hdrs=None,
+            fp=None,
         )
 
         provider = OllamaProvider()
         assert provider.generate("Test prompt") is None
 
-    @patch('urllib.request.urlopen')
+    @patch("urllib.request.urlopen")
     def test_missing_model_raises_a_named_error(self, mock_urlopen):
         """Un 404 d'Ollama nomme le modele absent et dit comment l'installer."""
         mock_urlopen.side_effect = HTTPError(
             url="http://localhost:11434/api/generate",
-            code=404, msg="Not Found", hdrs=None, fp=None,
+            code=404,
+            msg="Not Found",
+            hdrs=None,
+            fp=None,
         )
 
         provider = OllamaProvider(OllamaConfig(model="absent:1b"))
@@ -406,7 +406,7 @@ class TestGenerateTimeout:
         assert "ollama pull absent:1b" in str(exc_info.value)
         assert isinstance(exc_info.value, OllamaError)
 
-    @patch('urllib.request.urlopen')
+    @patch("urllib.request.urlopen")
     def test_unreadable_response_still_returns_none(self, mock_urlopen):
         """Contrat inchange : un JSON illisible reste un None."""
         mock_response = MagicMock()
@@ -424,9 +424,7 @@ class TestGenerateTimeout:
         C'est le test qui reproduit le defaut signale par le dev : avant F-032
         il rendait `TimeoutError: timed out` non rattrape.
         """
-        provider = OllamaProvider(
-            OllamaConfig(base_url=dead_server, model="qwen3:14b", timeout=1)
-        )
+        provider = OllamaProvider(OllamaConfig(base_url=dead_server, model="qwen3:14b", timeout=1))
 
         with pytest.raises(OllamaTimeoutError) as excinfo:
             provider.generate("Test prompt")
@@ -440,7 +438,7 @@ class TestGenerateTimeout:
         `providers.py` faisait `print(f"Erreur Ollama: {e}")`, ce qui polluait
         la sortie du CLI et de tout script important le module.
         """
-        with patch('urllib.request.urlopen', side_effect=URLError("Connection refused")):
+        with patch("urllib.request.urlopen", side_effect=URLError("Connection refused")):
             OllamaProvider().generate("Test prompt")
 
         captured = capsys.readouterr()
@@ -450,20 +448,20 @@ class TestGenerateTimeout:
 class TestListModelsTimeout:
     """`list_models()` avait la meme faille que `generate()`."""
 
-    @patch('urllib.request.urlopen')
+    @patch("urllib.request.urlopen")
     def test_timeout_returns_empty_list(self, mock_urlopen):
         """Contrat de `list_models()` : la liste vide, jamais une exception nue."""
         mock_urlopen.side_effect = TimeoutError("timed out")
 
         assert OllamaProvider().list_models() == []
 
-    @patch('urllib.request.urlopen')
+    @patch("urllib.request.urlopen")
     def test_connect_timeout_wrapped_in_urlerror_returns_empty_list(self, mock_urlopen):
         mock_urlopen.side_effect = URLError(TimeoutError("timed out"))
 
         assert OllamaProvider().list_models() == []
 
-    @patch('urllib.request.urlopen')
+    @patch("urllib.request.urlopen")
     def test_is_available_still_false_on_timeout(self, mock_urlopen):
         """Non-regression : `is_available()` rattrapait deja le depassement.
 
@@ -512,7 +510,7 @@ class TestTimeoutConfiguration:
         """Mutant vise : la variable est lue, mais `urlopen` recoit autre chose."""
         monkeypatch.setenv(OLLAMA_TIMEOUT_ENV_VAR, "33")
 
-        with patch('urllib.request.urlopen') as mock_urlopen:
+        with patch("urllib.request.urlopen") as mock_urlopen:
             mock_response = MagicMock()
             mock_response.read.return_value = json.dumps({"response": "ok"}).encode()
             mock_response.__enter__ = MagicMock(return_value=mock_response)

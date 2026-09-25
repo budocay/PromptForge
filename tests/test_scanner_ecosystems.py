@@ -16,9 +16,9 @@ import pytest
 
 from promptforge import scanner as scanner_module
 from promptforge.scanner import (
+    DetectedPackage,
     ProjectScanner,
     ScanResult,
-    DetectedPackage,
     SecurityAlert,
 )
 from promptforge.security import (
@@ -84,13 +84,11 @@ class MyProjectConan(ConanFile):
         project_dir.mkdir()
         (project_dir / "main.cpp").write_text("int main() { return 0; }")
         (project_dir / "conanfile.txt").write_text("[requires]\nfmt/10.0.0\n")
-        (project_dir / "conan.lock").write_text(json.dumps({
-            "version": "0.5",
-            "requires": [
-                "fmt/10.1.1@",
-                "spdlog/1.12.0@user/channel"
-            ]
-        }))
+        (project_dir / "conan.lock").write_text(
+            json.dumps(
+                {"version": "0.5", "requires": ["fmt/10.1.1@", "spdlog/1.12.0@user/channel"]}
+            )
+        )
 
         scanner = ProjectScanner()
         # Call the lockfile parser directly
@@ -108,11 +106,15 @@ class TestVcpkgParser:
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
         (project_dir / "main.cpp").write_text("int main() { return 0; }")
-        (project_dir / "vcpkg.json").write_text(json.dumps({
-            "name": "my-project",
-            "version": "1.0.0",
-            "dependencies": ["boost", "openssl", "curl"]
-        }))
+        (project_dir / "vcpkg.json").write_text(
+            json.dumps(
+                {
+                    "name": "my-project",
+                    "version": "1.0.0",
+                    "dependencies": ["boost", "openssl", "curl"],
+                }
+            )
+        )
 
         scanner = ProjectScanner()
         result = scanner.scan(project_dir)
@@ -130,16 +132,18 @@ class TestVcpkgParser:
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
         (project_dir / "main.cpp").write_text("int main() { return 0; }")
-        (project_dir / "vcpkg.json").write_text(json.dumps({
-            "name": "my-project",
-            "dependencies": [
-                {"name": "openssl", "version>=": "3.0.0"},
-                {"name": "curl", "version": "8.4.0"}
-            ],
-            "overrides": [
-                {"name": "zlib", "version": "1.3.0"}
-            ]
-        }))
+        (project_dir / "vcpkg.json").write_text(
+            json.dumps(
+                {
+                    "name": "my-project",
+                    "dependencies": [
+                        {"name": "openssl", "version>=": "3.0.0"},
+                        {"name": "curl", "version": "8.4.0"},
+                    ],
+                    "overrides": [{"name": "zlib", "version": "1.3.0"}],
+                }
+            )
+        )
 
         scanner = ProjectScanner()
         result = scanner.scan(project_dir)
@@ -194,19 +198,17 @@ let package = Package(name: "Test", dependencies: [
     .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.0.0")
 ])
 """)
-        (project_dir / "Package.resolved").write_text(json.dumps({
-            "pins": [
+        (project_dir / "Package.resolved").write_text(
+            json.dumps(
                 {
-                    "identity": "alamofire",
-                    "state": {"version": "5.8.1"}
-                },
-                {
-                    "identity": "swiftlint",
-                    "state": {"version": "0.54.0"}
+                    "pins": [
+                        {"identity": "alamofire", "state": {"version": "5.8.1"}},
+                        {"identity": "swiftlint", "state": {"version": "0.54.0"}},
+                    ],
+                    "version": 2,
                 }
-            ],
-            "version": 2
-        }))
+            )
+        )
 
         scanner = ProjectScanner()
         installed = scanner._parse_swift_lockfile(project_dir)
@@ -219,16 +221,11 @@ let package = Package(name: "Test", dependencies: [
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
         (project_dir / "main.swift").write_text('print("Hello")')
-        (project_dir / "Package.resolved").write_text(json.dumps({
-            "object": {
-                "pins": [
-                    {
-                        "package": "Alamofire",
-                        "state": {"version": "5.6.0"}
-                    }
-                ]
-            }
-        }))
+        (project_dir / "Package.resolved").write_text(
+            json.dumps(
+                {"object": {"pins": [{"package": "Alamofire", "state": {"version": "5.6.0"}}]}}
+            )
+        )
 
         scanner = ProjectScanner()
         installed = scanner._parse_swift_lockfile(project_dir)
@@ -302,10 +299,11 @@ let package = Package(name: "Test", dependencies: [
 ])
 """)
         # Lockfile has different (more recent) version
-        (project_dir / "Package.resolved").write_text(json.dumps({
-            "pins": [{"identity": "alamofire", "state": {"version": "5.9.1"}}],
-            "version": 2
-        }))
+        (project_dir / "Package.resolved").write_text(
+            json.dumps(
+                {"pins": [{"identity": "alamofire", "state": {"version": "5.9.1"}}], "version": 2}
+            )
+        )
 
         scanner = ProjectScanner()
         result = scanner.scan(project_dir)
@@ -416,9 +414,7 @@ class TestMultiEcosystemProject:
         (project_dir / "conanfile.txt").write_text("[requires]\nfmt/10.1.1\nspdlog/1.12.0\n")
 
         # vcpkg deps
-        (project_dir / "vcpkg.json").write_text(json.dumps({
-            "dependencies": ["boost", "openssl"]
-        }))
+        (project_dir / "vcpkg.json").write_text(json.dumps({"dependencies": ["boost", "openssl"]}))
 
         # CMake deps
         (project_dir / "CMakeLists.txt").write_text("""
@@ -448,7 +444,7 @@ class TestSecurityAlertsWithReferences:
             severity="HIGH",
             summary="Test vulnerability",
             fixed_version="1.2.0",
-            references=["https://nvd.nist.gov/vuln/detail/CVE-2023-12345"]
+            references=["https://nvd.nist.gov/vuln/detail/CVE-2023-12345"],
         )
 
         assert alert.references is not None
@@ -473,26 +469,26 @@ class TestLanguageDetectionForSecurity:
         """Should detect C++ and trigger C++ security guidelines."""
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
-        (project_dir / "main.cpp").write_text('#include <iostream>\nint main() {}')
-        (project_dir / "utils.hpp").write_text('#pragma once')
+        (project_dir / "main.cpp").write_text("#include <iostream>\nint main() {}")
+        (project_dir / "utils.hpp").write_text("#pragma once")
 
         scanner = ProjectScanner()
         result = scanner.scan(project_dir)
 
-        lang_names = [l.name for l in result.languages]
+        lang_names = [lang.name for lang in result.languages]
         assert "C++" in lang_names
 
     def test_detect_c_language(self, temp_dir):
         """Should detect C language."""
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
-        (project_dir / "main.c").write_text('#include <stdio.h>\nint main() {}')
-        (project_dir / "utils.h").write_text('#ifndef UTILS_H')
+        (project_dir / "main.c").write_text("#include <stdio.h>\nint main() {}")
+        (project_dir / "utils.h").write_text("#ifndef UTILS_H")
 
         scanner = ProjectScanner()
         result = scanner.scan(project_dir)
 
-        lang_names = [l.name for l in result.languages]
+        lang_names = [lang.name for lang in result.languages]
         assert "C" in lang_names
 
     def test_detect_swift_language(self, temp_dir):
@@ -500,12 +496,12 @@ class TestLanguageDetectionForSecurity:
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
         (project_dir / "main.swift").write_text('import Foundation\nprint("Hello")')
-        (project_dir / "Utils.swift").write_text('class Utils {}')
+        (project_dir / "Utils.swift").write_text("class Utils {}")
 
         scanner = ProjectScanner()
         result = scanner.scan(project_dir)
 
-        lang_names = [l.name for l in result.languages]
+        lang_names = [lang.name for lang in result.languages]
         assert "Swift" in lang_names
 
 
@@ -516,7 +512,7 @@ class TestSecurityContextBuilding:
         """Should include cpp in security context for C++ projects."""
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
-        (project_dir / "main.cpp").write_text('int main() { return 0; }')
+        (project_dir / "main.cpp").write_text("int main() { return 0; }")
 
         scanner = ProjectScanner()
         result = scanner.scan(project_dir)
@@ -544,7 +540,7 @@ class TestGeneratedConfigSecurity:
         """Generated config should include C/C++ security guidelines."""
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
-        (project_dir / "main.cpp").write_text('int main() { return 0; }')
+        (project_dir / "main.cpp").write_text("int main() { return 0; }")
         (project_dir / "conanfile.txt").write_text("[requires]\nfmt/10.1.1\n")
 
         scanner = ProjectScanner()
@@ -593,7 +589,7 @@ class TestCVEReportingEnhanced:
                 severity="CRITICAL",
                 summary="Test vulnerability",
                 fixed_version="2.0.0",
-                references=["https://nvd.nist.gov/vuln/detail/CVE-2023-12345"]
+                references=["https://nvd.nist.gov/vuln/detail/CVE-2023-12345"],
             )
         ]
 
@@ -616,10 +612,7 @@ class TestCVEReportingEnhanced:
         # Add a mock CVE for a Python package
         result.security_alerts = [
             SecurityAlert(
-                cve_id="CVE-2023-99999",
-                package="flask",
-                severity="HIGH",
-                fixed_version="2.3.0"
+                cve_id="CVE-2023-99999", package="flask", severity="HIGH", fixed_version="2.3.0"
             )
         ]
 
@@ -633,10 +626,10 @@ class TestCVEReportingEnhanced:
             assert "2.3.0" in config or "Mettre" in config
 
 
-
 # =============================================================================
 # PARITE ENTRE LES ECOSYSTEMES EMIS PAR LE SCANNER ET CEUX QU'ACCEPTE OSV
 # =============================================================================
+
 
 def _ecosystems_emitted_by_scanner() -> set:
     """Libelles passes a `DetectedPackage(ecosystem=...)` dans le scanner.
@@ -657,9 +650,9 @@ class TestScannerOsvEcosystemParity:
         assert emitted, "la lecture du source n'a trouve aucun ecosysteme"
 
         unclassified = {
-            eco for eco in emitted
-            if normalize_osv_ecosystem(eco) is None
-            and eco not in OSV_UNSUPPORTED_ECOSYSTEMS
+            eco
+            for eco in emitted
+            if normalize_osv_ecosystem(eco) is None and eco not in OSV_UNSUPPORTED_ECOSYSTEMS
         }
         assert unclassified == set(), (
             "ces libelles partiraient tels quels vers OSV et le feraient repondre "
@@ -686,7 +679,9 @@ class TestCveCheckFailureReachesTheUser:
         return ScanResult(
             packages=[
                 DetectedPackage(
-                    ecosystem="PyPI", name="gradio", version="4.0.0",
+                    ecosystem="PyPI",
+                    name="gradio",
+                    version="4.0.0",
                     source_file="requirements.txt",
                 ),
             ]
@@ -703,9 +698,7 @@ class TestCveCheckFailureReachesTheUser:
             alerts = scanner.check_security(result)
 
         assert alerts == []
-        assert any(
-            error.startswith(CVE_CHECK_INCOMPLETE_PREFIX) for error in result.errors
-        )
+        assert any(error.startswith(CVE_CHECK_INCOMPLETE_PREFIX) for error in result.errors)
 
     def test_healthy_check_adds_no_error(self):
         """Un projet sain ne doit pas ressembler a une panne."""
@@ -750,6 +743,7 @@ class TestCveCheckFailureReachesTheUser:
         config = scanner.generate_config(result, "projet-test")
 
         assert "INCOMPLETE" not in config
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

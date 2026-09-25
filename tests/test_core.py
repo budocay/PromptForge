@@ -2,10 +2,10 @@
 Tests pour le module core (PromptForge).
 """
 
-import pytest
-import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
+
+import pytest
 
 from promptforge.core import PromptForge
 from promptforge.providers import OllamaModelNotFoundError, OllamaTimeoutError
@@ -18,11 +18,11 @@ class TestPromptForgeInit:
     def test_init_creates_directories(self, temp_dir):
         """Test que l'init crée les dossiers nécessaires."""
         forge = PromptForge(temp_dir)
-        
+
         assert (Path(temp_dir) / "history").exists()
         assert (Path(temp_dir) / "projects").exists()
         assert (Path(temp_dir) / "promptforge.db").exists()
-        
+
         forge.close()
 
     def test_init_default_path(self):
@@ -39,10 +39,10 @@ class TestProjectManagement:
     def test_init_project_success(self, forge, sample_config_file):
         """Test de l'initialisation d'un projet."""
         success, message = forge.init_project("test-proj", sample_config_file)
-        
-        assert success == True
+
+        assert success
         assert "initialisé" in message or "succès" in message
-        
+
         # Vérifier que le projet existe
         project = forge.db.get_project("test-proj")
         assert project is not None
@@ -51,78 +51,78 @@ class TestProjectManagement:
     def test_init_project_file_not_found(self, forge):
         """Test avec fichier de config inexistant."""
         success, message = forge.init_project("test", "/nonexistent/file.md")
-        
-        assert success == False
+
+        assert not success
         assert "introuvable" in message
 
     def test_init_project_wrong_extension(self, forge, temp_dir):
         """Test avec mauvaise extension de fichier."""
         txt_file = Path(temp_dir) / "config.txt"
         txt_file.write_text("content")
-        
+
         success, message = forge.init_project("test", str(txt_file))
-        
-        assert success == False
+
+        assert not success
         assert ".md" in message
 
     def test_init_project_update_existing(self, forge, sample_config_file, temp_dir):
         """Test de mise à jour d'un projet existant."""
         # Créer le projet
         forge.init_project("update-test", sample_config_file)
-        
+
         # Modifier le fichier de config
         new_config = Path(temp_dir) / "updated.md"
         new_config.write_text("# Updated Config\nNew content")
-        
+
         # Réinitialiser
         success, message = forge.init_project("update-test", str(new_config))
-        
-        assert success == True
+
+        assert success
         assert "mis à jour" in message
-        
+
         project = forge.db.get_project("update-test")
         assert "Updated Config" in project.config_content
 
     def test_use_project_success(self, forge, sample_config_file):
         """Test de l'activation d'un projet."""
         forge.init_project("proj1", sample_config_file)
-        
+
         success, message = forge.use_project("proj1")
-        
-        assert success == True
+
+        assert success
         assert forge.get_current_project().name == "proj1"
 
     def test_use_project_not_found(self, forge):
         """Test d'activation d'un projet inexistant."""
         success, message = forge.use_project("nonexistent")
-        
-        assert success == False
+
+        assert not success
         assert "introuvable" in message
 
     def test_list_projects(self, forge, sample_config_file):
         """Test de la liste des projets."""
         assert len(forge.list_projects()) == 0
-        
+
         forge.init_project("alpha", sample_config_file)
         forge.init_project("beta", sample_config_file)
-        
+
         projects = forge.list_projects()
         assert len(projects) == 2
 
     def test_delete_project_success(self, forge, sample_config_file):
         """Test de suppression d'un projet."""
         forge.init_project("to-delete", sample_config_file)
-        
+
         success, message = forge.delete_project("to-delete")
-        
-        assert success == True
+
+        assert success
         assert forge.db.get_project("to-delete") is None
 
     def test_delete_project_not_found(self, forge):
         """Test de suppression d'un projet inexistant."""
         success, message = forge.delete_project("nonexistent")
-        
-        assert success == False
+
+        assert not success
 
 
 class TestFormatPrompt:
@@ -247,9 +247,9 @@ class TestFormatPrompt:
         forge.init_project("test", sample_config_file)
         forge.use_project("test")
         forge.ollama = mock_ollama_available
-        
+
         forge.format_prompt("my test prompt")
-        
+
         history = forge.get_history()
         assert len(history) == 1
         assert history[0].raw_prompt == "my test prompt"
@@ -263,14 +263,14 @@ class TestHistoryFile:
         forge.init_project("test", sample_config_file)
         forge.use_project("test")
         forge.ollama = mock_ollama_available
-        
+
         success, file_path, formatted, security_ctx = forge.format_prompt("create api endpoint")
 
         assert success is True
         assert security_ctx is not None
-        
+
         content = Path(file_path).read_text()
-        
+
         assert "# Prompt History" in content
         assert "Projet" in content
         assert "test" in content
@@ -292,9 +292,9 @@ class TestCheckStatus:
         """Test de la structure du statut."""
         forge.init_project("test", sample_config_file)
         forge.use_project("test")
-        
+
         status = forge.check_status()
-        
+
         assert "ollama_available" in status
         assert "ollama_models" in status
         assert "current_model" in status
@@ -307,9 +307,9 @@ class TestCheckStatus:
         """Test des valeurs du statut."""
         forge.init_project("status-test", sample_config_file)
         forge.use_project("status-test")
-        
+
         status = forge.check_status()
-        
+
         assert status["active_project"] == "status-test"
         assert status["total_projects"] == 1
         assert status["current_model"] == "qwen3:8b"
@@ -321,7 +321,7 @@ class TestConfigureOllama:
     def test_configure_model(self, forge):
         """Test du changement de modèle."""
         forge.configure_ollama(model="mistral")
-        
+
         assert forge.ollama.config.model == "mistral"
 
     def test_configure_model_keeps_ollama_host(self, forge, monkeypatch):
@@ -340,7 +340,7 @@ class TestConfigureOllama:
     def test_configure_base_url(self, forge):
         """Test du changement d'URL."""
         forge.configure_ollama(base_url="http://custom:8080")
-        
+
         assert forge.ollama.config.base_url == "http://custom:8080"
 
 
@@ -900,9 +900,7 @@ class TestFormatPromptTimeout:
         assert "OLLAMA_TIMEOUT" in message
         assert "OLLAMA_MODEL" in message
 
-    def test_timeout_is_distinguishable_from_ollama_absent(
-        self, forge, mock_ollama_unavailable
-    ):
+    def test_timeout_is_distinguishable_from_ollama_absent(self, forge, mock_ollama_unavailable):
         """Mutant vise : servir le meme message pour les deux conditions.
 
         Si les deux messages se confondent, l'utilisateur dont le modele est

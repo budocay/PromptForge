@@ -2,24 +2,18 @@
 Tests pour le module scanner (ProjectScanner).
 """
 
-import pytest
-import os
 from pathlib import Path
 
+import pytest
+
 from promptforge.scanner import (
+    DEFAULT_IGNORE_PATTERNS,
+    DetectedFramework,
+    DetectedLanguage,
     ProjectScanner,
     ScanResult,
-    DetectedLanguage,
-    DetectedFramework,
-    DetectedDatabase,
-    CodeConventions,
-    TestSetup,
-    DockerSetup,
-    CICDSetup,
-    ProjectStructure,
-    scan_directory,
     normalize_version_constraint,
-    DEFAULT_IGNORE_PATTERNS,
+    scan_directory,
 )
 
 
@@ -137,7 +131,7 @@ class TestLanguageDetection:
         result = scanner.scan(project_dir)
 
         assert len(result.languages) == 2
-        lang_names = [l.name for l in result.languages]
+        lang_names = [lang.name for lang in result.languages]
         assert "Python" in lang_names
         assert "JavaScript" in lang_names
 
@@ -150,9 +144,7 @@ class TestLanguageDetection:
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
         (project_dir / "main.py").write_text("print('hello')")
-        (project_dir / "pyproject.toml").write_text(
-            '[project]\nrequires-python = ">=3.11"\n'
-        )
+        (project_dir / "pyproject.toml").write_text('[project]\nrequires-python = ">=3.11"\n')
 
         scanner = ProjectScanner()
         result = scanner.scan(project_dir)
@@ -212,9 +204,9 @@ class TestVersionNormalization:
     @pytest.mark.parametrize(
         "raw",
         [
-            "<4",       # rendait "4", une borne HAUTE
-            "<=3.12",   # meme famille
-            "!=3.9",    # rendait "3.9", une version EXCLUE
+            "<4",  # rendait "4", une borne HAUTE
+            "<=3.12",  # meme famille
+            "!=3.9",  # rendait "3.9", une version EXCLUE
         ],
     )
     def test_returns_none_when_no_clause_states_a_lower_bound(self, raw):
@@ -229,9 +221,9 @@ class TestVersionNormalization:
     @pytest.mark.parametrize(
         "raw,expected",
         [
-            ("<3.13,>=3.10", "3.10"),   # rendait "3.13", la borne HAUTE
-            ("!=3.9,>=3.11", "3.11"),   # rendait "3.9", la version EXCLUE
-            (">=3.10,<3.13", "3.10"),   # deja correct, verrouille dans l'autre ordre
+            ("<3.13,>=3.10", "3.10"),  # rendait "3.13", la borne HAUTE
+            ("!=3.9,>=3.11", "3.11"),  # rendait "3.9", la version EXCLUE
+            (">=3.10,<3.13", "3.10"),  # deja correct, verrouille dans l'autre ordre
             ("!=3.9,!=3.10,>=3.8", "3.8"),
         ],
     )
@@ -241,9 +233,8 @@ class TestVersionNormalization:
 
     def test_clause_order_is_irrelevant(self):
         """Meme contrainte, deux ecritures : meme reponse."""
-        assert (
-            normalize_version_constraint(">=3.10,<3.13")
-            == normalize_version_constraint("<3.13,>=3.10")
+        assert normalize_version_constraint(">=3.10,<3.13") == normalize_version_constraint(
+            "<3.13,>=3.10"
         )
 
     @pytest.mark.parametrize(
@@ -363,9 +354,7 @@ class TestFrameworkDetection:
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
         (project_dir / "app.tsx").write_text("import React from 'react'")
-        (project_dir / "package.json").write_text(
-            '{"dependencies": {"react": "^18.0.0"}}'
-        )
+        (project_dir / "package.json").write_text('{"dependencies": {"react": "^18.0.0"}}')
 
         scanner = ProjectScanner()
         result = scanner.scan(project_dir)
@@ -393,9 +382,7 @@ class TestFrameworkDetection:
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
         (project_dir / "main.py").write_text("print('hello')")
-        (project_dir / "requirements.txt").write_text(
-            "fastapi\nsqlalchemy\npytest\n"
-        )
+        (project_dir / "requirements.txt").write_text("fastapi\nsqlalchemy\npytest\n")
 
         scanner = ProjectScanner()
         result = scanner.scan(project_dir)
@@ -435,9 +422,7 @@ services:
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
         (project_dir / "main.py").write_text("print('hello')")
-        (project_dir / ".env").write_text(
-            "DATABASE_URL=postgresql://user:pass@localhost/db\n"
-        )
+        (project_dir / ".env").write_text("DATABASE_URL=postgresql://user:pass@localhost/db\n")
 
         scanner = ProjectScanner()
         result = scanner.scan(project_dir)
@@ -549,9 +534,7 @@ class TestTestDetection:
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
         (project_dir / "app.js").write_text("console.log('hello')")
-        (project_dir / "package.json").write_text(
-            '{"devDependencies": {"jest": "^29.0.0"}}'
-        )
+        (project_dir / "package.json").write_text('{"devDependencies": {"jest": "^29.0.0"}}')
 
         scanner = ProjectScanner()
         result = scanner.scan(project_dir)
@@ -564,9 +547,7 @@ class TestTestDetection:
         project_dir = Path(temp_dir) / "project"
         project_dir.mkdir()
         (project_dir / "app.ts").write_text("console.log('hello')")
-        (project_dir / "vitest.config.ts").write_text(
-            "export default { test: { } }"
-        )
+        (project_dir / "vitest.config.ts").write_text("export default { test: { } }")
 
         scanner = ProjectScanner()
         result = scanner.scan(project_dir)

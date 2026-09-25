@@ -4,7 +4,7 @@ Design moderne avec beaucoup d'espace et de respiration
 """
 
 # Logo SVG - Plus grand pour le header
-LOGO_SVG_LARGE = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="56" height="56">
+LOGO_SVG_LARGE = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="56" height="56">
   <defs>
     <linearGradient id="fire" x1="0%" y1="100%" x2="0%" y2="0%">
       <stop offset="0%" style="stop-color:#ff4d00"/>
@@ -27,7 +27,7 @@ LOGO_SVG_LARGE = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" 
   </g>
   <circle cx="28" cy="30" r="2" fill="#ffdd00"/>
   <circle cx="36" cy="28" r="2" fill="#ffaa00"/>
-</svg>'''
+</svg>"""
 
 # CSS Ultra-Aéré
 CSS_V4 = """
@@ -45,25 +45,25 @@ CSS_V4 = """
     --primary-light: #ff8c5a;
     --primary-dark: #e55a2b;
     --primary-glow: rgba(255, 107, 53, 0.25);
-    
+
     /* Backgrounds */
     --bg-page: #0a0e14;
     --bg-card: #12161d;
     --bg-card-elevated: #181d26;
     --bg-input: #0d1117;
     --bg-hover: #1c222d;
-    
+
     /* Bordures */
     --border: #2a3140;
     --border-light: #3d4554;
     --border-focus: var(--primary);
-    
+
     /* Textes */
     --text-primary: #f0f4f8;
     --text-secondary: #9ca3af;
     --text-muted: #6b7280;
     --text-link: var(--primary-light);
-    
+
     /* États */
     --success: #10b981;
     --success-bg: rgba(16, 185, 129, 0.1);
@@ -73,7 +73,7 @@ CSS_V4 = """
     --error-bg: rgba(239, 68, 68, 0.1);
     --info: #3b82f6;
     --info-bg: rgba(59, 130, 246, 0.1);
-    
+
     /* Espacements - TRÈS GÉNÉREUX */
     --space-xs: 8px;
     --space-sm: 12px;
@@ -81,19 +81,19 @@ CSS_V4 = """
     --space-lg: 32px;
     --space-xl: 48px;
     --space-2xl: 64px;
-    
+
     /* Rayons */
     --radius-sm: 8px;
     --radius-md: 12px;
     --radius-lg: 16px;
     --radius-xl: 24px;
-    
+
     /* Ombres */
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
     --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.35);
     --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.45);
     --shadow-glow: 0 0 30px var(--primary-glow);
-    
+
     /* Transitions */
     --transition-fast: 0.15s ease;
     --transition-normal: 0.25s ease;
@@ -709,20 +709,20 @@ input[type="range"] {
     .gradio-container {
         padding: var(--space-lg) !important;
     }
-    
+
     .pf-header h1 {
         font-size: 2rem;
     }
-    
+
     .pf-demo-box {
         grid-template-columns: 1fr;
     }
-    
+
     .pf-demo-arrow {
         transform: rotate(90deg);
         justify-content: center;
     }
-    
+
     .pf-steps {
         flex-direction: column;
         gap: var(--space-lg);
@@ -734,7 +734,7 @@ input[type="range"] {
         padding: var(--space-sm) var(--space-md) !important;
         font-size: 0.9rem !important;
     }
-    
+
     .pf-header-stats {
         flex-direction: column;
         gap: var(--space-md);
