@@ -4,6 +4,7 @@ CLI de PromptForge - Interface en ligne de commande.
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -12,7 +13,13 @@ from .core import PromptForge
 
 
 def get_forge(base_path: Optional[str] = None) -> PromptForge:
-    """Crée une instance PromptForge avec le bon chemin de base."""
+    """Crée une instance PromptForge avec le bon chemin de base.
+
+    Priorité : ``--path``, puis ``PROMPTFORGE_DATA_PATH`` (même variable que
+    l'interface web), puis le premier ``promptforge.db`` trouvé en remontant
+    l'arborescence, puis le dossier courant.
+    """
+    base_path = base_path or os.environ.get("PROMPTFORGE_DATA_PATH")
     if base_path:
         return PromptForge(base_path)
     

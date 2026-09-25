@@ -11,7 +11,9 @@ from promptforge.providers import (
     OllamaProvider,
     OllamaConfig,
     OllamaError,
+    OllamaModelNotFoundError,
     OllamaTimeoutError,
+    DEFAULT_OLLAMA_MODEL,
     DEFAULT_OLLAMA_TIMEOUT,
     OLLAMA_TIMEOUT_ENV_VAR,
     build_timeout_message,
@@ -35,7 +37,7 @@ class TestOllamaConfig:
 
         # L'URL peut varier selon l'environnement (WSL vs normal)
         assert "11434" in config.base_url
-        assert config.model == "llama3.1"
+        assert config.model == DEFAULT_OLLAMA_MODEL == "qwen3:8b"
         assert config.timeout == DEFAULT_OLLAMA_TIMEOUT
 
     def test_custom_values(self):
@@ -59,7 +61,7 @@ class TestOllamaProvider:
         provider = OllamaProvider()
         
         assert provider.config.base_url == "http://localhost:11434"
-        assert provider.config.model == "llama3.1"
+        assert provider.config.model == DEFAULT_OLLAMA_MODEL
 
     def test_init_custom_config(self):
         """Test de l'initialisation avec config personnalisée."""
@@ -142,7 +144,7 @@ class TestOllamaProvider:
         
         # Vérifier le payload
         payload = json.loads(request.data.decode())
-        assert payload["model"] == "llama3.1"
+        assert payload["model"] == DEFAULT_OLLAMA_MODEL
         assert payload["prompt"] == "Test prompt"
         assert payload["system"] == "System prompt"
 
@@ -389,6 +391,22 @@ class TestGenerateTimeout:
         assert provider.generate("Test prompt") is None
 
     @patch('urllib.request.urlopen')
+    def test_missing_model_raises_a_named_error(self, mock_urlopen):
+        """Un 404 d'Ollama nomme le modele absent et dit comment l'installer."""
+        mock_urlopen.side_effect = HTTPError(
+            url="http://localhost:11434/api/generate",
+            code=404, msg="Not Found", hdrs=None, fp=None,
+        )
+
+        provider = OllamaProvider(OllamaConfig(model="absent:1b"))
+        with pytest.raises(OllamaModelNotFoundError) as exc_info:
+            provider.generate("Test prompt")
+
+        assert exc_info.value.model == "absent:1b"
+        assert "ollama pull absent:1b" in str(exc_info.value)
+        assert isinstance(exc_info.value, OllamaError)
+
+    @patch('urllib.request.urlopen')
     def test_unreadable_response_still_returns_none(self, mock_urlopen):
         """Contrat inchange : un JSON illisible reste un None."""
         mock_response = MagicMock()
@@ -519,3 +537,19 @@ class TestTimeoutConfiguration:
         """
         monkeypatch.setenv(OLLAMA_TIMEOUT_ENV_VAR, bad_value)
         assert get_default_ollama_timeout() == DEFAULT_OLLAMA_TIMEOUT
+
+
+class TestOllamaModelFromEnvironment:
+    """Le modele par defaut suit OLLAMA_MODEL, pour la CLI comme pour le web."""
+
+    def test_environment_variable_is_honoured(self, monkeypatch):
+        monkeypatch.setenv("OLLAMA_MODEL", "phi4-mini")
+        assert OllamaConfig().model == "phi4-mini"
+
+    def test_blank_value_falls_back_to_default(self, monkeypatch):
+        monkeypatch.setenv("OLLAMA_MODEL", "   ")
+        assert OllamaConfig().model == DEFAULT_OLLAMA_MODEL
+
+    def test_explicit_value_beats_the_environment(self, monkeypatch):
+        monkeypatch.setenv("OLLAMA_MODEL", "phi4-mini")
+        assert OllamaConfig(model="qwen3:14b").model == "qwen3:14b"

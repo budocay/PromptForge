@@ -933,3 +933,38 @@ class TestErrorHandling:
         result = scanner.scan(project_dir)
 
         assert result.project_name_suggestion == "my-awesome-project"
+
+
+class TestPrismaDetection:
+    """Une seule signature Prisma couvre JS et Python.
+
+    Deux cles "Prisma" coexistaient dans FRAMEWORK_SIGNATURES : la seconde
+    ecrasait la premiere et un projet Python (prisma-client-py) n'etait plus
+    detecte.
+    """
+
+    @pytest.mark.parametrize(
+        "filename,content",
+        [
+            ("package.json", '{"dependencies": {"@prisma/client": "5.0.0"}}'),
+            ("requirements.txt", "fastapi==0.110\nprisma==0.13.1\n"),
+            ("schema.prisma", 'generator client {\n  provider = "prisma-client-js"\n}\n'),
+        ],
+    )
+    def test_prisma_is_detected(self, temp_dir, filename, content):
+        project_dir = Path(temp_dir) / "project"
+        project_dir.mkdir()
+        (project_dir / filename).write_text(content)
+
+        result = ProjectScanner().scan(project_dir)
+
+        assert "Prisma" in [fw.name for fw in result.frameworks]
+
+    def test_similar_package_name_is_not_prisma(self, temp_dir):
+        project_dir = Path(temp_dir) / "project"
+        project_dir.mkdir()
+        (project_dir / "requirements.txt").write_text("prismatic==1.0\n")
+
+        result = ProjectScanner().scan(project_dir)
+
+        assert "Prisma" not in [fw.name for fw in result.frameworks]

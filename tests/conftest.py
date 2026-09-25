@@ -28,6 +28,18 @@ def temp_db(temp_dir):
     db.close()
 
 
+@pytest.fixture(autouse=True)
+def _isolate_promptforge_env(monkeypatch):
+    """Isole la suite du shell qui la lance.
+
+    `OLLAMA_MODEL` et `PROMPTFORGE_DATA_PATH` sont lus par la CLI, le coeur et
+    l'interface web : sans ce nettoyage, un `export OLLAMA_MODEL=...` chez le
+    contributeur changerait le verdict de tests qui n'en parlent pas.
+    """
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    monkeypatch.delenv("PROMPTFORGE_DATA_PATH", raising=False)
+
+
 @pytest.fixture
 def forge(temp_dir):
     """Crée une instance PromptForge avec répertoire temporaire."""

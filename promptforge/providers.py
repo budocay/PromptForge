@@ -39,6 +39,26 @@ class OllamaTimeoutError(OllamaError, TimeoutError):
         super().__init__(build_timeout_message(model, timeout))
 
 
+class OllamaModelNotFoundError(OllamaError):
+    """Ollama a repondu 404 : le modele demande n'est pas installe.
+
+    Avant cette classe, ce cas remontait comme un ``None`` indistinct et
+    l'utilisateur ne voyait que ``HTTP Error 404: Not Found``, sans savoir
+    quel modele manquait ni comment l'installer.
+
+    Attributes:
+        model: Le modele introuvable.
+    """
+
+    def __init__(self, model: str) -> None:
+        self.model = model
+        super().__init__(
+            f"Le modele '{model}' n'est pas installe dans Ollama. "
+            f"Installe-le avec `ollama pull {model}`, ou choisis un modele "
+            f"deja present (`ollama list`) via OLLAMA_MODEL ou --model."
+        )
+
+
 # Delai par defaut, en secondes, pour une generation Ollama.
 #
 # Justification chiffree. Mesure de premiere main du 2026-09-07 sur cette
@@ -63,6 +83,17 @@ DEFAULT_OLLAMA_TIMEOUT = 600
 # Variable d'environnement de reglage, meme convention que OLLAMA_HOST et
 # OLLAMA_MODEL : lecture directe dans os.environ, sans fichier de config.
 OLLAMA_TIMEOUT_ENV_VAR = "OLLAMA_TIMEOUT"
+
+# Modele par defaut, identique pour la CLI, l'interface web et Docker
+# (`compose.yaml`). La CLI utilisait auparavant `llama3.1`, que peu de gens
+# ont installe : `promptforge format` echouait alors sur un 404.
+DEFAULT_OLLAMA_MODEL = "qwen3:8b"
+OLLAMA_MODEL_ENV_VAR = "OLLAMA_MODEL"
+
+
+def get_default_ollama_model() -> str:
+    """Modele Ollama par defaut : ``OLLAMA_MODEL`` s'il est defini et non vide."""
+    return os.environ.get(OLLAMA_MODEL_ENV_VAR, "").strip() or DEFAULT_OLLAMA_MODEL
 
 
 def get_default_ollama_timeout() -> int:
@@ -128,7 +159,7 @@ def get_default_ollama_url() -> str:
         with open("/proc/version", "r") as f:
             if "microsoft" in f.read().lower():
                 return "http://host.docker.internal:11434"
-    except:
+    except OSError:
         pass
     
     return "http://localhost:11434"
@@ -137,7 +168,7 @@ def get_default_ollama_url() -> str:
 @dataclass
 class OllamaConfig:
     base_url: str = field(default_factory=get_default_ollama_url)
-    model: str = "llama3.1"
+    model: str = field(default_factory=get_default_ollama_model)
     timeout: int = field(default_factory=get_default_ollama_timeout)
 
 
@@ -239,6 +270,12 @@ class OllamaProvider:
             raise OllamaTimeoutError(self.config.model, self.config.timeout) from e
 
         except urllib.error.HTTPError as e:
+            if e.code == 404:
+                # Ollama repond 404 sur /api/generate quand le modele n'existe
+                # pas localement. C'est le cas le plus frequent d'echec apres
+                # une installation : on le nomme au lieu de rendre un None muet.
+                logger.error("Modele Ollama introuvable: %s", self.config.model)
+                raise OllamaModelNotFoundError(self.config.model) from e
             logger.error("Ollama a repondu %s: %s", e.code, e)
             return None
 
@@ -597,6 +634,8 @@ def format_prompt_with_ollama(
         Si return_conversion_info=True: tuple (prompt, was_converted)
 
     Raises:
+        OllamaModelNotFoundError: propage tel quel quand le modele n'est pas
+            installe, pour que le message dise lequel et comment l'installer.
         OllamaTimeoutError: propage volontairement le depassement de delai de
             `OllamaProvider.generate()`, au lieu de l'aplatir en None. C'est ce
             qui permet a `PromptForge.format_prompt()` de distinguer « le

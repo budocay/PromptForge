@@ -10,7 +10,13 @@ __author__ = "PromptForge Contributors"
 
 from .core import PromptForge
 from .database import Database, Project, PromptHistory
-from .providers import OllamaProvider, OllamaConfig, OllamaError, OllamaTimeoutError
+from .providers import (
+    OllamaProvider,
+    OllamaConfig,
+    OllamaError,
+    OllamaModelNotFoundError,
+    OllamaTimeoutError,
+)
 from .tokens import estimate_tokens, count_tokens_detailed, get_token_info
 from .logging_config import init_logging, get_logger
 from .scanner import ProjectScanner, ScanResult, scan_directory
@@ -35,6 +41,7 @@ __all__ = [
     "OllamaProvider",
     "OllamaConfig",
     "OllamaError",
+    "OllamaModelNotFoundError",
     "OllamaTimeoutError",
     "estimate_tokens",
     "count_tokens_detailed",

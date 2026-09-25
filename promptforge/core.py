@@ -11,7 +11,10 @@ from .database import Database, Project
 from .providers import (
     OllamaProvider,
     OllamaConfig,
+    OllamaModelNotFoundError,
     OllamaTimeoutError,
+    get_default_ollama_model,
+    get_default_ollama_url,
     format_prompt_with_ollama,
 )
 from .security import (
@@ -48,12 +51,17 @@ class PromptForge:
         self.db = Database(str(self.db_path))
         self.ollama = OllamaProvider()
     
-    def configure_ollama(self, model: str = "llama3.1", 
-                         base_url: str = "http://localhost:11434") -> bool:
-        """Configure le provider Ollama."""
+    def configure_ollama(self, model: Optional[str] = None,
+                         base_url: Optional[str] = None) -> bool:
+        """Configure le provider Ollama.
+
+        Un argument omis reprend le defaut de l'environnement
+        (``OLLAMA_MODEL``, ``OLLAMA_HOST``) au lieu d'une valeur figee :
+        ``promptforge format --model x`` ne perd donc plus ``OLLAMA_HOST``.
+        """
         self.ollama = OllamaProvider(OllamaConfig(
-            base_url=base_url,
-            model=model
+            base_url=base_url or get_default_ollama_url(),
+            model=model or get_default_ollama_model(),
         ))
         return self.ollama.is_available()
 
@@ -226,6 +234,9 @@ class PromptForge:
                 f"Timeout Ollama pendant le reformatage: "
                 f"model={exc.model} timeout={exc.timeout}s"
             )
+            return False, str(exc), None, security_context
+        except OllamaModelNotFoundError as exc:
+            logger.warning(f"Modele Ollama introuvable: {exc.model}")
             return False, str(exc), None, security_context
 
         if not formatted:

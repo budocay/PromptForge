@@ -27,6 +27,19 @@ class TestGetForge:
         forge.close()
 
 
+    def test_get_forge_reads_data_path_from_environment(self, temp_dir, monkeypatch):
+        """La CLI suit PROMPTFORGE_DATA_PATH, comme l'interface web."""
+        monkeypatch.setenv("PROMPTFORGE_DATA_PATH", temp_dir)
+        forge = get_forge(None)
+        assert str(forge.base_path) == temp_dir
+        forge.close()
+
+    def test_explicit_path_beats_the_environment(self, temp_dir, tmp_path, monkeypatch):
+        monkeypatch.setenv("PROMPTFORGE_DATA_PATH", str(tmp_path))
+        forge = get_forge(temp_dir)
+        assert str(forge.base_path) == temp_dir
+        forge.close()
+
 class TestCliCommands:
     """Tests pour les commandes CLI."""
 

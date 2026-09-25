@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from promptforge.core import PromptForge
-from promptforge.providers import OllamaTimeoutError
+from promptforge.providers import OllamaModelNotFoundError, OllamaTimeoutError
 from promptforge.security import SecurityContext
 
 
@@ -312,7 +312,7 @@ class TestCheckStatus:
         
         assert status["active_project"] == "status-test"
         assert status["total_projects"] == 1
-        assert status["current_model"] == "llama3.1"
+        assert status["current_model"] == "qwen3:8b"
 
 
 class TestConfigureOllama:
@@ -323,6 +323,19 @@ class TestConfigureOllama:
         forge.configure_ollama(model="mistral")
         
         assert forge.ollama.config.model == "mistral"
+
+    def test_configure_model_keeps_ollama_host(self, forge, monkeypatch):
+        """`--model` seul ne doit pas ecraser OLLAMA_HOST par localhost."""
+        monkeypatch.setenv("OLLAMA_HOST", "http://gpu-box:11434")
+        forge.configure_ollama(model="mistral")
+
+        assert forge.ollama.config.base_url == "http://gpu-box:11434"
+
+    def test_configure_without_model_uses_environment(self, forge, monkeypatch):
+        monkeypatch.setenv("OLLAMA_MODEL", "phi4-mini")
+        forge.configure_ollama()
+
+        assert forge.ollama.config.model == "phi4-mini"
 
     def test_configure_base_url(self, forge):
         """Test du changement d'URL."""
@@ -951,3 +964,40 @@ class TestFormatPromptTimeout:
         )
 
         assert isinstance(security_ctx, SecurityContext)
+
+
+class TestFormatPromptMissingModel:
+    """Un modele non installe produit un message qui dit quoi faire."""
+
+    class MissingModelProvider:
+        def __init__(self, model="absent:1b"):
+            self.config = MagicMock(model=model, timeout=600)
+            self._model = model
+
+        def is_available(self):
+            return True
+
+        def list_models(self):
+            return []
+
+        def generate(self, prompt, system_prompt="", num_ctx=16384):
+            raise OllamaModelNotFoundError(self._model)
+
+    def test_missing_model_is_a_failure_with_the_install_command(self, forge):
+        forge.ollama = self.MissingModelProvider()
+
+        success, message, formatted, _ = forge.format_prompt("test prompt")
+
+        assert success is False
+        assert formatted is None
+        assert "absent:1b" in message
+        assert "ollama pull absent:1b" in message
+
+    def test_missing_model_saves_nothing(self, forge, sample_config_file):
+        forge.init_project("test", sample_config_file)
+        forge.use_project("test")
+        forge.ollama = self.MissingModelProvider()
+
+        forge.format_prompt("test prompt")
+
+        assert forge.get_history() == []

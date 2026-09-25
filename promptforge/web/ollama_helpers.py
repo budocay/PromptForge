@@ -32,9 +32,9 @@ def get_forge() -> PromptForge:
             _forge = PromptForge()
 
         # Configurer Ollama avec les variables d'environnement
-        ollama_model = os.environ.get("OLLAMA_MODEL", "qwen3:8b")
-        ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-        _forge.configure_ollama(model=ollama_model, base_url=ollama_host)
+        _forge.configure_ollama()
+        ollama_model = _forge.ollama.config.model
+        ollama_host = _forge.ollama.config.base_url
 
         # Import du logger
         from ..logging_config import get_logger

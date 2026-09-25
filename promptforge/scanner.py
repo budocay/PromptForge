@@ -258,11 +258,6 @@ FRAMEWORK_SIGNATURES = {
         "pattern": r"peewee",
         "category": "orm",
     },
-    "Prisma": {
-        "files": ["requirements.txt", "pyproject.toml"],
-        "pattern": r"prisma",
-        "category": "orm",
-    },
     # Python Libraries (common)
     "Pydantic": {
         "files": ["requirements.txt", "pyproject.toml"],
@@ -437,9 +432,11 @@ FRAMEWORK_SIGNATURES = {
         "category": "mobile",
     },
     # Prisma
+    # Une seule entree : deux cles "Prisma" dans ce dict faisaient que la
+    # seconde (JS) ecrasait silencieusement la premiere (Python, prisma-client-py).
     "Prisma": {
-        "files": ["schema.prisma", "package.json"],
-        "pattern": r'"prisma"|"@prisma/client"',
+        "files": ["schema.prisma", "package.json", "requirements.txt", "pyproject.toml"],
+        "pattern": r'(?m)"prisma"|"@prisma/client"|prisma-client|^\s*prisma\b',
         "category": "orm",
     },
 }
