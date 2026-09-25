@@ -1405,6 +1405,16 @@ class TestStatusEndpointRefreshesItself:
             vierge = self._get_status(port)
             assert vierge["stale"] is True
 
+            # Ce GET a lance une sonde en tache de fond. Si elle se termine
+            # apres le vieillissement ci-dessous, elle reecrit un horodatage
+            # frais et le test echoue au hasard : on l'attend, puis on
+            # empeche toute nouvelle sonde d'etre jugee due.
+            limite = time.time() + 10
+            while module.state["probe_in_progress"] and time.time() < limite:
+                time.sleep(0.01)
+            assert module.state["probe_in_progress"] is False
+            module.FAST_PROBE_TTL = module.SLOW_PROBE_TTL = 3600
+
             # Etat volontairement vieilli : `stale` doit repasser a True.
             module.stamp_probe(now=time.time() - module.STALE_AFTER - 5, include_docker=True)
             vieux = self._get_status(port)

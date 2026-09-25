@@ -428,4 +428,10 @@ class TestPerformance:
         print(f"\nAverage formatting time: {avg_time:.2f}s")
 
         # Formatting should complete in reasonable time
-        assert avg_time < 60, "Formatting took too long"
+        # Le seuil depend de la machine : 60 s par defaut, reglable par
+        # PROMPTFORGE_PERF_BUDGET pour une machine lente ou un gros modele.
+        budget = float(os.environ.get("PROMPTFORGE_PERF_BUDGET", "60"))
+        assert avg_time < budget, (
+            f"Reformatage moyen en {avg_time:.1f} s, budget {budget:.0f} s "
+            "(PROMPTFORGE_PERF_BUDGET pour l'ajuster)"
+        )
