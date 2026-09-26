@@ -352,6 +352,27 @@ Parmi eux, `TestPerformance::test_formatting_speed` compare le temps de
 réponse moyen à un budget de 60 s, réglable par `PROMPTFORGE_PERF_BUDGET` sur
 une machine lente ou avec un gros modèle.
 
+### Mesurer le reformatage
+
+`make eval` lance le banc d'évaluation (`scripts/evaluate_prompt_quality.py`)
+sur un vrai Ollama : douze demandes de métiers différents, dont trois pièges
+(une demande qu'un petit modèle a tendance à exécuter, une consigne adressée au
+reformateur, une demande en anglais), reformatées pour quatre profils par le
+même chemin que l'interface web.
+
+Chaque sortie passe des contrôles nommés, en oui ou non avec leur raison
+(`promptforge/conformance.py`) : format attendu par le profil, pas d'annonce en
+tête, pas de raisonnement `<think>` qui fuit, demande réécrite et non exécutée,
+termes de la demande conservés, même langue, aucun pourcentage inventé. Le
+rapport donne le taux de conformité par contrôle et par profil, **sans score
+global** : aucun chiffre ne mesure « la qualité » d'un prompt.
+
+```bash
+make eval ARGS="--json avant.json"                    # avant une modification
+make eval ARGS="--json apres.json"                    # après, puis comparer
+make eval ARGS="--model qwen3:14b --profiles gpt_5.1"
+```
+
 `make lint` et `make format-check` sont verts. La CI GitHub Actions
 (`.github/workflows/ci.yml`) les relance sur chaque PR, avec la suite de tests
 sous Python 3.10, 3.11 et 3.12 (sans les tests `integration`, et sans Ollama :

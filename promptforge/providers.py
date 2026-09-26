@@ -317,7 +317,7 @@ _UNCLOSED_THINK_RE = re.compile(r"^\s*<think>.*", re.DOTALL | re.IGNORECASE)
 _FENCED_RE = re.compile(r"^```[\w-]*\s*\n(.*?)\n?```\s*$", re.DOTALL)
 # Phrases d'annonce qu'un modèle place avant le prompt (« Voici le prompt
 # reformaté : »). Elles ne sont retirées que seules sur leur ligne et courtes.
-_PREAMBLE_RE = re.compile(
+PREAMBLE_RE = re.compile(
     r"^\s*(voici|voil[aà]|bien s[uû]r|d'accord|ok|parfait|here is|here's|sure|certainly)\b.{0,160}$",
     re.IGNORECASE,
 )
@@ -345,7 +345,7 @@ def clean_model_output(text: str, expected_syntax: str = "any") -> str:
         text = fenced.group(1).strip()
 
     lines = text.split("\n")
-    while lines and (not lines[0].strip() or _PREAMBLE_RE.match(lines[0])):
+    while lines and (not lines[0].strip() or PREAMBLE_RE.match(lines[0])):
         lines.pop(0)
     text = "\n".join(lines).strip()
 

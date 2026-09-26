@@ -17,7 +17,9 @@ from pathlib import Path
 
 import gradio as gr
 
+from ..conformance import LABELS, check_reformatted_prompt
 from ..logging_config import get_logger
+from ..profiles import get_expected_syntax
 from ..security import format_cve_alert
 from .analysis import compare_prompts
 
@@ -209,6 +211,19 @@ def format_prompt_with_ollama(
         status = "✅ Prompt enrichi avec succès!"
         if security_ctx and security_ctx.cves:
             status += f" ⚠️ {len(security_ctx.cves)} CVE(s) détectée(s)!"
+
+        # Contrôles de conformité : dire tout de suite si le modèle local n'a
+        # pas respecté le profil, plutôt que de laisser l'utilisateur copier
+        # un prompt défectueux sans le savoir.
+        conformance = check_reformatted_prompt(
+            raw_prompt,
+            formatted,
+            get_expected_syntax(profile),
+            (get_project_config(proj_name) or "") if proj_name else "",
+        )
+        if conformance.failures:
+            labels = ", ".join(LABELS[c.name] for c in conformance.failures)
+            status += f" ⚠️ À vérifier : {labels}."
 
         # Analyse et recommandation
         analysis = compare_prompts(raw_prompt, formatted)
