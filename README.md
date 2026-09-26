@@ -249,15 +249,15 @@ Elles n'ont pas toutes la même portée. C'est mesuré, pas supposé :
 
 En CLI, `--model` et `--path` priment sur ces variables pour une commande.
 
-En Docker, `compose.yaml` fixe déjà `OLLAMA_HOST`, `OLLAMA_MODEL` et
-`PROMPTFORGE_DATA_PATH`. Pour changer de modèle sans éditer le fichier :
+En Docker, `compose.yaml` fixe déjà `OLLAMA_HOST`, `OLLAMA_MODEL`,
+`OLLAMA_TIMEOUT` et `PROMPTFORGE_DATA_PATH`. Pour changer de modèle sans éditer le fichier :
 
 ```bash
 OLLAMA_MODEL=qwen3:14b docker compose up
 ```
 
-Le fichier `.env.example` documente les deux variables que `compose.yaml` lit
-depuis un `.env` : `OLLAMA_MODEL` et `HOSTFS_PATH`. Copie-le pour t'en servir :
+Le fichier `.env.example` documente les trois variables que `compose.yaml` lit
+depuis un `.env` : `OLLAMA_MODEL`, `OLLAMA_TIMEOUT` et `HOSTFS_PATH`. Copie-le pour t'en servir :
 
 ```bash
 cp .env.example .env
@@ -477,10 +477,8 @@ versions de paquets, jamais ton code ni tes prompts.
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — mettre en place l'environnement, ouvrir une PR
 - [docs/SOURCES_METHODOLOGY.md](docs/SOURCES_METHODOLOGY.md) — sources des benchmarks et des tarifs
-- [docs/DOCKER_GUIDE.md](docs/DOCKER_GUIDE.md) — guide Docker détaillé.
-  **Attention :** ce guide est en cours de mise à jour et une partie de ses
-  commandes visent une ancienne disposition des fichiers compose. En cas de
-  contradiction, ce README fait foi.
+- [docs/DOCKER_GUIDE.md](docs/DOCKER_GUIDE.md) — les sept fichiers compose,
+  Ollama natif ou conteneurisé, données et dépannage
 
 ---
 

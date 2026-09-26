@@ -1,5 +1,5 @@
 # Docker Compose pour PromptForge + Ollama
-# Usage: docker-compose up -d
+# Usage (depuis la racine du depot): docker compose -f docker/compose/docker-compose.yml up -d
 # Pour NVIDIA GPU (8GB+ VRAM)
 
 services:
@@ -69,6 +69,8 @@ services:
     environment:
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_MODEL=qwen3:8b
+      # Delai d'une generation Ollama, en secondes (voir .env.example)
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-600}
     restart: unless-stopped
 
   # PromptForge CLI (interactif)
@@ -86,6 +88,8 @@ services:
     environment:
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_MODEL=qwen3:8b
+      # Delai d'une generation Ollama, en secondes (voir .env.example)
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-600}
     stdin_open: true
     tty: true
     restart: "no"

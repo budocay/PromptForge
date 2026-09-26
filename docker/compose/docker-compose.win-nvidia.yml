@@ -11,7 +11,7 @@
 # 3. Télécharge un modèle: ollama pull qwen3:8b
 # 4. Lance ce docker-compose pour l'interface web uniquement
 #
-# Usage: docker compose -f docker-compose.win-nvidia.yml up -d
+# Usage: docker compose -f docker/compose/docker-compose.win-nvidia.yml up -d
 
 services:
   # Interface Web uniquement (Ollama tourne en natif sur Windows)
@@ -26,6 +26,8 @@ services:
       # Connecte à Ollama natif Windows (host.docker.internal)
       - OLLAMA_HOST=http://host.docker.internal:11434
       - OLLAMA_MODEL=qwen3:8b
+      # Delai d'une generation Ollama, en secondes (voir .env.example)
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-600}
       - PROMPTFORGE_DATA_PATH=/data
     volumes:
       # IMPORTANT: Persistance de la BDD SQLite et des projets
@@ -53,7 +55,7 @@ services:
 #   ollama pull qwen3:8b
 #
 # Puis:
-#   docker compose -f docker-compose.win-nvidia.yml up -d
+#   docker compose -f docker/compose/docker-compose.win-nvidia.yml up -d
 #
 # Ouvre: http://localhost:7860
 #

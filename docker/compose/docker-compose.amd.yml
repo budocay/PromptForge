@@ -2,7 +2,7 @@
 # PromptForge - Docker Compose AMD ROCm
 # Pour cartes graphiques AMD (RX 6000/7000)
 # ============================================
-# Usage: docker compose -f docker-compose.amd.yml up -d
+# Usage: docker compose -f docker/compose/docker-compose.amd.yml up -d
 
 services:
   # Service Ollama avec support AMD ROCm
@@ -46,6 +46,8 @@ services:
       # Modèle optimisé pour AMD (VRAM élevé)
       # qwen3:14b = meilleur instruction-following que qwen2.5
       - OLLAMA_MODEL=qwen3:14b
+      # Delai d'une generation Ollama, en secondes (voir .env.example)
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-600}
       - PROMPTFORGE_DATA_PATH=/data
     volumes:
       # IMPORTANT: Persistance de la BDD SQLite et des projets
@@ -80,6 +82,6 @@ volumes:
 # qwen2.5:32b        (~18GB) - Ancien max
 #
 # Pour changer de modèle:
-# docker compose -f docker-compose.amd.yml exec ollama ollama pull qwen3:32b
+# docker compose -f docker/compose/docker-compose.amd.yml exec ollama ollama pull qwen3:32b
 # Puis modifie OLLAMA_MODEL ci-dessus et redémarre
 # ============================================
