@@ -222,6 +222,16 @@ promptforge format "ton prompt" --model qwen3:14b
 Si le modèle n'est pas installé, le message le dit et donne la commande
 `ollama pull` à lancer.
 
+`--profile` choisit le LLM **cible**, celui à qui tu enverras le prompt
+reformaté : il fixe le format produit (XML pour Claude et Gemini, Markdown
+pour GPT, au choix pour `universel`). Sans `--profile`, la CLI produit un
+prompt XML générique.
+
+```bash
+promptforge format "écris un email de relance client" --profile gpt_5.1
+promptforge format --help     # liste des profils
+```
+
 Exemple complet :
 
 ```bash
