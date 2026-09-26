@@ -58,14 +58,36 @@ def compose_services(path):
 
 # Options globales (avant la sous-commande) qui consomment la valeur suivante.
 _GLOBAL_VALUE_FLAGS = {
-    "-f", "--file", "-p", "--project-name", "--profile", "--env-file",
-    "--project-directory", "--progress", "--ansi",
+    "-f",
+    "--file",
+    "-p",
+    "--project-name",
+    "--profile",
+    "--env-file",
+    "--project-directory",
+    "--progress",
+    "--ansi",
 }
 
 # Sous-commandes dont tous les arguments libres sont des services.
 _SERVICE_LIST_SUBCOMMANDS = {
-    "up", "build", "ps", "pull", "push", "restart", "start", "stop", "kill",
-    "logs", "rm", "create", "images", "top", "pause", "unpause", "wait",
+    "up",
+    "build",
+    "ps",
+    "pull",
+    "push",
+    "restart",
+    "start",
+    "stop",
+    "kill",
+    "logs",
+    "rm",
+    "create",
+    "images",
+    "top",
+    "pause",
+    "unpause",
+    "wait",
 }
 
 # Sous-commandes dont seul le PREMIER argument libre est un service
@@ -74,11 +96,39 @@ _SERVICE_FIRST_SUBCOMMANDS = {"run", "exec"}
 
 # Options qui consomment la valeur suivante, apres la sous-commande.
 _VALUE_FLAGS = {
-    "--scale", "--entrypoint", "--user", "-u", "--workdir", "-w", "--name",
-    "--label", "-l", "--volume", "--publish", "-p", "--tail", "-n", "--since",
-    "--until", "--timeout", "-t", "--parallel", "--rmi", "--profile",
-    "--memory", "-m", "--exit-code-from", "--attach", "--no-attach", "--env",
-    "-e", "--build-arg", "--ssh", "--builder", "--index", "--wait-timeout",
+    "--scale",
+    "--entrypoint",
+    "--user",
+    "-u",
+    "--workdir",
+    "-w",
+    "--name",
+    "--label",
+    "-l",
+    "--volume",
+    "--publish",
+    "-p",
+    "--tail",
+    "-n",
+    "--since",
+    "--until",
+    "--timeout",
+    "-t",
+    "--parallel",
+    "--rmi",
+    "--profile",
+    "--memory",
+    "-m",
+    "--exit-code-from",
+    "--attach",
+    "--no-attach",
+    "--env",
+    "-e",
+    "--build-arg",
+    "--ssh",
+    "--builder",
+    "--index",
+    "--wait-timeout",
 }
 
 
@@ -235,7 +285,7 @@ def code_without_comments(path):
     test sur sa propre justification, et pousserait a effacer l'explication.
     """
     lignes = Path(path).read_text(encoding="utf-8").splitlines()
-    return "\n".join(l for l in lignes if not l.lstrip().startswith("#"))
+    return "\n".join(ligne for ligne in lignes if not ligne.lstrip().startswith("#"))
 
 
 def load_core_bridge(package_dir=None):
@@ -260,7 +310,9 @@ def python39_interpreter():
         try:
             sortie = subprocess.run(
                 [candidat, "-c", "import sys; print('%d.%d' % sys.version_info[:2])"],
-                capture_output=True, text=True, timeout=15,
+                capture_output=True,
+                text=True,
+                timeout=15,
             )
         except (OSError, subprocess.SubprocessError):
             continue
@@ -310,19 +362,16 @@ const window = { open: function () {} };
     queue = "\nupdateUI(" + _json.dumps(payload) + ");\n"
     queue += "process.stdout.write(JSON.stringify(elements));\n"
 
-    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
-                                     encoding="utf-8") as fichier:
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as fichier:
         fichier.write(harnais + script + queue)
         chemin = fichier.name
     try:
-        sortie = subprocess.run(["node", chemin], capture_output=True, text=True,
-                                timeout=60)
+        sortie = subprocess.run(["node", chemin], capture_output=True, text=True, timeout=60)
     finally:
         os.unlink(chemin)
 
     assert sortie.returncode == 0, (
-        "le JavaScript servi par le launcher n'a pas pu s'executer :\n"
-        + sortie.stderr[:2000]
+        "le JavaScript servi par le launcher n'a pas pu s'executer :\n" + sortie.stderr[:2000]
     )
     return _json.loads(sortie.stdout)
 
@@ -360,17 +409,17 @@ class TestDockerComposeFiles:
     def test_all_compose_files_exist(self):
         """Vérifie que tous les fichiers docker-compose existent."""
         base_dir = Path(__file__).parent.parent
-        
+
         expected_files = [
-            'compose.yaml',                                 # defaut, les 3 OS
-            'docker/compose/docker-compose.yml',            # NVIDIA
-            'docker/compose/docker-compose.cpu.yml',        # CPU
-            'docker/compose/docker-compose.amd.yml',        # Linux AMD
-            'docker/compose/docker-compose.amd-max.yml',    # Linux AMD MAX
-            'docker/compose/docker-compose.win-nvidia.yml', # Windows NVIDIA
-            'docker/compose/docker-compose.win-amd.yml',    # Windows AMD
+            "compose.yaml",  # defaut, les 3 OS
+            "docker/compose/docker-compose.yml",  # NVIDIA
+            "docker/compose/docker-compose.cpu.yml",  # CPU
+            "docker/compose/docker-compose.amd.yml",  # Linux AMD
+            "docker/compose/docker-compose.amd-max.yml",  # Linux AMD MAX
+            "docker/compose/docker-compose.win-nvidia.yml",  # Windows NVIDIA
+            "docker/compose/docker-compose.win-amd.yml",  # Windows AMD
         ]
-        
+
         for filename in expected_files:
             filepath = base_dir / filename
             assert filepath.exists(), f"Fichier manquant: {filename}"
@@ -378,10 +427,10 @@ class TestDockerComposeFiles:
     def test_compose_files_valid_yaml(self):
         """Vérifie que les fichiers docker-compose sont du YAML valide."""
         import yaml
-        
+
         base_dir = Path(__file__).parent.parent
-        compose_files = list(base_dir.glob('docker/compose/*.yml')) + [base_dir / 'compose.yaml']
-        
+        compose_files = list(base_dir.glob("docker/compose/*.yml")) + [base_dir / "compose.yaml"]
+
         for filepath in compose_files:
             try:
                 with open(filepath) as f:
@@ -400,7 +449,7 @@ class TestDockerComposeFiles:
         """
         for filepath in compose_paths():
             services = compose_services(filepath)
-            assert 'promptforge-web' in services, (
+            assert "promptforge-web" in services, (
                 f"{filepath.name} ne declare pas 'promptforge-web' : "
                 f"services = {sorted(services)}"
             )
@@ -414,20 +463,20 @@ class TestDockerComposeFiles:
         """
         base_dir = Path(__file__).parent.parent
         avec_ollama_conteneurise = {
-            'docker-compose.yml',        # NVIDIA, GPU expose a Docker
-            'docker-compose.cpu.yml',    # sans GPU
-            'docker-compose.amd.yml',    # AMD ROCm Linux
-            'docker-compose.amd-max.yml',
+            "docker-compose.yml",  # NVIDIA, GPU expose a Docker
+            "docker-compose.cpu.yml",  # sans GPU
+            "docker-compose.amd.yml",  # AMD ROCm Linux
+            "docker-compose.amd-max.yml",
         }
         for filepath in compose_paths():
             services = compose_services(filepath)
             attendu = filepath.name in avec_ollama_conteneurise
-            assert ('ollama' in services) is attendu, (
+            assert ("ollama" in services) is attendu, (
                 f"{filepath.name} : service 'ollama' "
                 f"{'attendu' if attendu else 'non attendu'}, "
                 f"services = {sorted(services)}"
             )
-            assert filepath != base_dir / 'compose.yaml' or services == {'promptforge-web'}, (
+            assert filepath != base_dir / "compose.yaml" or services == {"promptforge-web"}, (
                 "compose.yaml, chemin par defaut DEC-010, ne doit exposer que "
                 f"l'interface : services = {sorted(services)}"
             )
@@ -438,22 +487,22 @@ class TestLauncherConfig:
 
     def test_launcher_file_exists(self):
         """Vérifie que launcher.py existe."""
-        launcher = Path(__file__).parent.parent / 'launcher.py'
+        launcher = Path(__file__).parent.parent / "launcher.py"
         assert launcher.exists(), "launcher.py n'existe pas"
 
     def test_launcher_has_docker_options(self):
         """Vérifie que le launcher a toutes les options Docker."""
-        launcher = Path(__file__).parent.parent / 'launcher.py'
+        launcher = Path(__file__).parent.parent / "launcher.py"
         content = launcher.read_text()
-        
+
         expected_options = [
-            'nvidia',
-            'win-nvidia-native',
-            'win-amd',
-            'linux-amd',
-            'cpu',
+            "nvidia",
+            "win-nvidia-native",
+            "win-amd",
+            "linux-amd",
+            "cpu",
         ]
-        
+
         for option in expected_options:
             assert f'"{option}"' in content, f"Option {option} manquante dans launcher"
 
@@ -479,9 +528,12 @@ class TestLauncherConfig:
         pont = load_core_bridge()
         assert pont.available, f"catalogue du coeur illisible : {pont.error}"
 
+        # L'interface vit dans `assets/launcher.html` : elle est couverte
+        # par le meme verrou que le code Python.
+        contenu += (BASE_DIR / "assets" / "launcher.html").read_text(encoding="utf-8")
         residus = [tag for tag in pont.known_tags() if tag in contenu]
         assert not residus, (
-            f"tags du catalogue recopies dans launcher.py : {residus}. "
+            f"tags du catalogue recopies dans launcher.py ou son interface : {residus}. "
             "Le catalogue est unique (DEC-003) ; une copie diverge (D-022)."
         )
 
@@ -491,20 +543,20 @@ class TestDockerfiles:
 
     def test_dockerfile_exists(self):
         """Vérifie que Dockerfile existe."""
-        dockerfile = Path(__file__).parent.parent / 'docker' / 'Dockerfile'
+        dockerfile = Path(__file__).parent.parent / "docker" / "Dockerfile"
         assert dockerfile.exists(), "Dockerfile n'existe pas"
 
     def test_dockerfile_web_exists(self):
         """Vérifie que Dockerfile.web existe."""
-        dockerfile = Path(__file__).parent.parent / 'docker' / 'Dockerfile.web'
+        dockerfile = Path(__file__).parent.parent / "docker" / "Dockerfile.web"
         assert dockerfile.exists(), "Dockerfile.web n'existe pas"
 
     def test_dockerfile_web_copies_templates(self):
         """Vérifie que Dockerfile.web copie les templates."""
-        dockerfile = Path(__file__).parent.parent / 'docker' / 'Dockerfile.web'
+        dockerfile = Path(__file__).parent.parent / "docker" / "Dockerfile.web"
         content = dockerfile.read_text()
-        
-        assert 'COPY templates/' in content, "Dockerfile.web ne copie pas les templates"
+
+        assert "COPY templates/" in content, "Dockerfile.web ne copie pas les templates"
 
 
 class TestEntryPoints:
@@ -517,9 +569,19 @@ class TestEntryPoints:
     """
 
     RETIRES = [
-        "Launcher.bat", "Start.bat", "launcher.ps1", "launcher.sh", "start.sh",
-        "run-web.bat", "run-web.ps1", "run-web.sh", "run.ps1",
-        "start-amd.ps1", "start-nvidia.ps1", "update.ps1", "update.sh",
+        "Launcher.bat",
+        "Start.bat",
+        "launcher.ps1",
+        "launcher.sh",
+        "start.sh",
+        "run-web.bat",
+        "run-web.ps1",
+        "run-web.sh",
+        "run.ps1",
+        "start-amd.ps1",
+        "start-nvidia.ps1",
+        "update.ps1",
+        "update.sh",
     ]
 
     def test_cross_platform_entry_points_exist(self):
@@ -550,39 +612,35 @@ class TestLauncherStateFixes:
 
     def test_rebuild_updates_state(self):
         """Vérifie que rebuild_docker_images met à jour l'état."""
-        launcher = Path(__file__).parent.parent / 'launcher.py'
+        launcher = Path(__file__).parent.parent / "launcher.py"
         content = launcher.read_text()
-        
+
         # Chercher la mise à jour de l'état dans rebuild_docker_images
         # Il doit y avoir state["promptforge_running"] = False après le docker down
         import re
-        rebuild_match = re.search(
-            r'def rebuild_docker_images.*?(?=def \w+|\Z)', 
-            content, 
-            re.DOTALL
-        )
+
+        rebuild_match = re.search(r"def rebuild_docker_images.*?(?=def \w+|\Z)", content, re.DOTALL)
         assert rebuild_match, "Fonction rebuild_docker_images non trouvée"
-        
+
         rebuild_code = rebuild_match.group()
-        assert 'state["promptforge_running"] = False' in rebuild_code, \
-            "rebuild_docker_images ne met pas à jour promptforge_running"
+        assert (
+            'state["promptforge_running"] = False' in rebuild_code
+        ), "rebuild_docker_images ne met pas à jour promptforge_running"
 
     def test_clean_docker_updates_state(self):
         """Vérifie que clean_docker met à jour l'état."""
-        launcher = Path(__file__).parent.parent / 'launcher.py'
+        launcher = Path(__file__).parent.parent / "launcher.py"
         content = launcher.read_text()
-        
+
         import re
-        clean_match = re.search(
-            r'def clean_docker.*?(?=def \w+|\Z)', 
-            content, 
-            re.DOTALL
-        )
+
+        clean_match = re.search(r"def clean_docker.*?(?=def \w+|\Z)", content, re.DOTALL)
         assert clean_match, "Fonction clean_docker non trouvée"
-        
+
         clean_code = clean_match.group()
-        assert 'state["promptforge_running"] = False' in clean_code, \
-            "clean_docker ne met pas à jour promptforge_running"
+        assert (
+            'state["promptforge_running"] = False' in clean_code
+        ), "clean_docker ne met pas à jour promptforge_running"
 
 
 class TestComposeServiceSeam:
@@ -634,13 +692,16 @@ class TestComposeServiceSeam:
         [
             ("docker compose build promptforge", ("compose.yaml", ["promptforge"])),
             ("docker compose up -d ollama", ("compose.yaml", ["ollama"])),
-            ("docker compose -f docker/compose/docker-compose.cpu.yml up -d",
-             ("docker/compose/docker-compose.cpu.yml", [])),
-            ("docker compose run --rm --no-deps --entrypoint promptforge "
-             "promptforge-web --path /data list",
-             ("compose.yaml", ["promptforge-web"])),
-            ("docker compose exec -T ollama ollama pull qwen3:8b",
-             ("compose.yaml", ["ollama"])),
+            (
+                "docker compose -f docker/compose/docker-compose.cpu.yml up -d",
+                ("docker/compose/docker-compose.cpu.yml", []),
+            ),
+            (
+                "docker compose run --rm --no-deps --entrypoint promptforge "
+                "promptforge-web --path /data list",
+                ("compose.yaml", ["promptforge-web"]),
+            ),
+            ("docker compose exec -T ollama ollama pull qwen3:8b", ("compose.yaml", ["ollama"])),
             ("docker compose logs -f promptforge-web", ("compose.yaml", ["promptforge-web"])),
             ("docker compose down -v", ("compose.yaml", [])),
             ("docker compose build --no-cache --pull", ("compose.yaml", [])),
@@ -681,7 +742,8 @@ class TestComposeServiceSeam:
         recorder = RecordingSubprocess()
         self._install_recorder(monkeypatch, module, recorder)
         monkeypatch.setattr(
-            module, "shutil",
+            module,
+            "shutil",
             types.SimpleNamespace(which=lambda name: "/usr/bin/" + name),
         )
 
@@ -706,14 +768,13 @@ class TestComposeServiceSeam:
         monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:1")
         monkeypatch.setattr("builtins.input", lambda *_: "n")
 
-        chemin = (
-            DEFAULT_COMPOSE if variante == DEFAULT_COMPOSE else f"docker/compose/{variante}"
-        )
+        chemin = DEFAULT_COMPOSE if variante == DEFAULT_COMPOSE else f"docker/compose/{variante}"
         module = load_script("docker_helper")
         recorder = RecordingSubprocess()
         self._install_recorder(monkeypatch, module, recorder)
         monkeypatch.setattr(
-            module, "shutil",
+            module,
+            "shutil",
             types.SimpleNamespace(which=lambda name: "/usr/bin/" + name),
         )
 
@@ -742,7 +803,8 @@ class TestComposeServiceSeam:
         # Hors commentaires : le commentaire qui documente la correction cite
         # l'ancienne valeur, ce n'est pas une occurrence executable.
         code = [
-            ligne for ligne in (BASE_DIR / "scripts" / "docker_helper.py").read_text().splitlines()
+            ligne
+            for ligne in (BASE_DIR / "scripts" / "docker_helper.py").read_text().splitlines()
             if not ligne.lstrip().startswith("#")
         ]
         assert not [ligne for ligne in code if "llama3.1" in ligne], (
@@ -752,14 +814,25 @@ class TestComposeServiceSeam:
 
         # Le modele du helper doit exister dans le compose par defaut.
         contenu = (BASE_DIR / DEFAULT_COMPOSE).read_text()
-        assert module.DEFAULT_MODEL in contenu, (
-            f"{module.DEFAULT_MODEL} n'apparait pas dans {DEFAULT_COMPOSE}"
-        )
+        assert (
+            module.DEFAULT_MODEL in contenu
+        ), f"{module.DEFAULT_MODEL} n'apparait pas dans {DEFAULT_COMPOSE}"
 
     # --- source 3 : scripts/build.py -------------------------------------
 
-    @pytest.mark.parametrize("config", [None, "default", "nvidia", "cpu", "linux-amd",
-                                        "linux-amd-max", "win-amd", "win-nvidia-native"])
+    @pytest.mark.parametrize(
+        "config",
+        [
+            None,
+            "default",
+            "nvidia",
+            "cpu",
+            "linux-amd",
+            "linux-amd-max",
+            "win-amd",
+            "win-nvidia-native",
+        ],
+    )
     def test_build_script_commands_name_existing_services(self, monkeypatch, config):
         monkeypatch.chdir(BASE_DIR)
         monkeypatch.setattr("builtins.input", lambda *_: "n")
@@ -769,8 +842,13 @@ class TestComposeServiceSeam:
         self._install_recorder(monkeypatch, module, recorder)
 
         args = types.SimpleNamespace(
-            config=config, no_cache=False, parallel=None, build=False,
-            force=True, images=True, dev=False,
+            config=config,
+            no_cache=False,
+            parallel=None,
+            build=False,
+            force=True,
+            images=True,
+            dev=False,
         )
         for nom in ("build", "up", "down", "clean"):
             getattr(module, f"cmd_{nom}")(args)
@@ -810,9 +888,16 @@ class TestDefaultPathIsActuallySelected:
 
     @pytest.mark.parametrize(
         "systeme,gpu",
-        [("Darwin", "apple"), ("Darwin", "cpu"), ("Windows", "nvidia"),
-         ("Windows", "amd"), ("Windows", "cpu"), ("Linux", "nvidia"),
-         ("Linux", "amd"), ("Linux", "cpu")],
+        [
+            ("Darwin", "apple"),
+            ("Darwin", "cpu"),
+            ("Windows", "nvidia"),
+            ("Windows", "amd"),
+            ("Windows", "cpu"),
+            ("Linux", "nvidia"),
+            ("Linux", "amd"),
+            ("Linux", "cpu"),
+        ],
     )
     def test_launcher_selects_the_root_compose_on_every_system(self, systeme, gpu):
         launcher = load_script_at(BASE_DIR / "launcher.py", "_seam_launcher")
@@ -834,9 +919,9 @@ class TestDefaultPathIsActuallySelected:
 
         for cle in launcher.state["available_compose_files"]:
             chemin = BASE_DIR / launcher.DOCKER_COMPOSE_OPTIONS[cle]["file"]
-            assert "ollama" not in compose_services(chemin), (
-                f"macOS propose '{cle}', qui conteneurise Ollama"
-            )
+            assert "ollama" not in compose_services(
+                chemin
+            ), f"macOS propose '{cle}', qui conteneurise Ollama"
 
     def test_launcher_options_point_to_existing_files(self):
         launcher = load_script_at(BASE_DIR / "launcher.py", "_seam_launcher")
@@ -865,6 +950,7 @@ class TestDefaultPathIsActuallySelected:
 # parlent a `/api/status` par le reseau, et font apparaitre un faux Ollama
 # en cours de route. Un `HTTP 200` sur la racine ne prouve rien ; le
 # comportement, si.
+
 
 def free_port():
     """Un port libre sur la boucle locale, rendu apres fermeture."""
@@ -1176,8 +1262,7 @@ class TestProbeCadence:
 
         module.run_probes(include_docker=False)
         assert stub.calls == [], (
-            "la cadence rapide ne doit forker aucun `docker` : "
-            f"appels observes = {stub.calls}"
+            "la cadence rapide ne doit forker aucun `docker` : " f"appels observes = {stub.calls}"
         )
 
     def test_a_slow_probe_does_fork_docker(self):
@@ -1202,8 +1287,7 @@ class TestProbeCadence:
     def test_the_fast_ttl_expires_before_the_client_polls_twice(self):
         """Peremption maximale vue par l'utilisateur : ~5 s."""
         module = fresh_launcher("_cadence_window")
-        module.stamp_probe(now=time.time() - module.FAST_PROBE_TTL - 0.1,
-                           include_docker=True)
+        module.stamp_probe(now=time.time() - module.FAST_PROBE_TTL - 0.1, include_docker=True)
         fast_due, slow_due = module.probe_due()
         assert fast_due is True
         assert slow_due is False, "Docker ne doit pas suivre la cadence rapide"
@@ -1301,9 +1385,9 @@ class TestStatusEndpointRefreshesItself:
             )
             assert vu["ollama_running"] is True
             assert vu["installed_models"] == ["qwen3:8b"]
-            assert vu["checked_at"] > premier_horodatage, (
-                "l'horodatage doit avancer : sinon l'etat est fige"
-            )
+            assert (
+                vu["checked_at"] > premier_horodatage
+            ), "l'horodatage doit avancer : sinon l'etat est fige"
             assert vu["age_seconds"] <= module.STALE_AFTER
         finally:
             serveur.shutdown()
@@ -1324,9 +1408,18 @@ class TestStatusEndpointRefreshesItself:
             vierge = self._get_status(port)
             assert vierge["stale"] is True
 
+            # Ce GET a lance une sonde en tache de fond. Si elle se termine
+            # apres le vieillissement ci-dessous, elle reecrit un horodatage
+            # frais et le test echoue au hasard : on l'attend, puis on
+            # empeche toute nouvelle sonde d'etre jugee due.
+            limite = time.time() + 10
+            while module.state["probe_in_progress"] and time.time() < limite:
+                time.sleep(0.01)
+            assert module.state["probe_in_progress"] is False
+            module.FAST_PROBE_TTL = module.SLOW_PROBE_TTL = 3600
+
             # Etat volontairement vieilli : `stale` doit repasser a True.
-            module.stamp_probe(now=time.time() - module.STALE_AFTER - 5,
-                               include_docker=True)
+            module.stamp_probe(now=time.time() - module.STALE_AFTER - 5, include_docker=True)
             vieux = self._get_status(port)
             assert vieux["stale"] is True
             assert vieux["age_seconds"] > module.STALE_AFTER
@@ -1368,9 +1461,9 @@ class TestComposeTableIsNotDuplicated:
 
     def test_no_javascript_copy_remains(self):
         module = fresh_launcher("_no_js_compose_copy")
-        assert "COMPOSE_OPTIONS = {" not in module.HTML_TEMPLATE, (
-            "la table de compose est redevenue duplique en JavaScript"
-        )
+        assert (
+            "COMPOSE_OPTIONS = {" not in module.HTML_TEMPLATE
+        ), "la table de compose est redevenue duplique en JavaScript"
 
     def test_the_selector_reads_the_served_table(self):
         module = fresh_launcher("_js_reads_payload")
@@ -1404,9 +1497,7 @@ class TestNoHardwareDetectionSurvives:
 
     def test_build_script_has_no_detect_gpu_left(self):
         contenu = code_without_comments(BASE_DIR / "scripts" / "build.py")
-        assert "def detect_gpu(" not in contenu, (
-            "la copie sans branche Darwin de D-018 est revenue"
-        )
+        assert "def detect_gpu(" not in contenu, "la copie sans branche Darwin de D-018 est revenue"
 
     def test_build_script_no_longer_falls_back_to_cpu_on_macos(self):
         """D-018, cote consequence : macOS retombait en silence sur `cpu`.
@@ -1429,9 +1520,14 @@ class TestNoHardwareDetectionSurvives:
         build = load_script("build")
         launcher = fresh_launcher("_mapping_partage")
         for systeme, marque in [
-            ("Darwin", "apple"), ("Darwin", None), ("Windows", "nvidia"),
-            ("Windows", "amd"), ("Windows", None), ("Linux", "nvidia"),
-            ("Linux", "amd"), ("Linux", "none"),
+            ("Darwin", "apple"),
+            ("Darwin", None),
+            ("Windows", "nvidia"),
+            ("Windows", "amd"),
+            ("Windows", None),
+            ("Linux", "nvidia"),
+            ("Linux", "amd"),
+            ("Linux", "none"),
         ]:
             attendu = build.compose_selection(systeme, marque)
             launcher.state["os"] = systeme
@@ -1455,9 +1551,9 @@ class TestServedCatalogComesFromTheCore:
         payload = module.status_payload()
 
         attendus = [m.tag for m in pont.models_by_footprint()]
-        assert [entree["tag"] for entree in payload["models"]] == attendus, (
-            "l'ordre servi doit etre celui de l'empreinte memoire (DEC-006)"
-        )
+        assert [
+            entree["tag"] for entree in payload["models"]
+        ] == attendus, "l'ordre servi doit etre celui de l'empreinte memoire (DEC-006)"
 
     def test_every_served_figure_matches_the_catalog(self):
         module = fresh_launcher("_payload_chiffres")
@@ -1487,9 +1583,7 @@ class TestServedCatalogComesFromTheCore:
 
         gabarit = module.HTML_TEMPLATE
         for perime in ("(40GB)", "(3GB)", "(2.5GB)", "(5GB)", "(9GB)", "(20GB)"):
-            assert perime not in gabarit, (
-                f"taille figee '{perime}' encore ecrite dans le HTML"
-            )
+            assert perime not in gabarit, f"taille figee '{perime}' encore ecrite dans le HTML"
 
     def test_the_html_carries_no_option_of_its_own(self):
         module = fresh_launcher("_html_sans_option")
@@ -1579,9 +1673,7 @@ class TestRecommendationIsMeasuredNotGuessed:
             assert recu["ollama_model"] == attendue.recommended.tag
             assert servie["maximum"]["tag"] == attendue.maximum.tag
             assert servie["basis"] == attendue.basis
-            assert servie["margin_gb"] == round(
-                attendue.margin_bytes / (1024 ** 3), 1
-            )
+            assert servie["margin_gb"] == round(attendue.margin_bytes / (1024**3), 1)
 
         # La memoire servie est celle qui a ete mesuree, pas une constante.
         assert recu["hardware"]["available_memory_basis"] == profil.available_memory_basis
@@ -1589,7 +1681,7 @@ class TestRecommendationIsMeasuredNotGuessed:
             assert recu["hardware"]["available_memory_gb"] is None
         else:
             assert recu["hardware"]["available_memory_gb"] == round(
-                profil.available_memory_bytes / (1024 ** 3), 1
+                profil.available_memory_bytes / (1024**3), 1
             )
 
     def test_forcing_a_gpu_brand_does_not_move_the_recommendation(self):
@@ -1658,9 +1750,9 @@ class TestDegradedModeIsVisible:
         assert payload["catalog_error"] == pont.error
         assert payload["models"] == []
         assert payload["recommendation"] is None
-        assert payload["ollama_model"] is None, (
-            "un modele par defaut en mode degrade serait le repli muet refuse"
-        )
+        assert (
+            payload["ollama_model"] is None
+        ), "un modele par defaut en mode degrade serait le repli muet refuse"
 
     def test_no_hardcoded_list_takes_over(self, tmp_path):
         module = fresh_launcher("_degrade_pas_de_repli")
@@ -1715,8 +1807,10 @@ class TestLauncherListensOnBothLoopbackFamilies:
         serveurs, fils, servis = module.serve_loopback(port)
         try:
             assert "127.0.0.1" in servis
-            adresses = [f"http://127.0.0.1:{port}/api/status",
-                        f"http://localhost:{port}/api/status"]
+            adresses = [
+                f"http://127.0.0.1:{port}/api/status",
+                f"http://localhost:{port}/api/status",
+            ]
             if "::1" in servis:
                 adresses.append(f"http://[::1]:{port}/api/status")
             for adresse in adresses:
@@ -1755,8 +1849,7 @@ class TestLauncherListensOnBothLoopbackFamilies:
             code = prise.connect_ex((externe, port))
             prise.close()
             assert code != 0, (
-                f"le launcher accepte une connexion sur {externe}:{port} : "
-                "D-037 est de retour"
+                f"le launcher accepte une connexion sur {externe}:{port} : " "D-037 est de retour"
             )
         finally:
             for serveur in serveurs:
@@ -1788,13 +1881,15 @@ class TestTheServedJavaScriptActuallyRuns:
     def test_the_script_block_compiles(self):
         module = fresh_launcher("_js_compile")
         script = extract_launcher_script(module)
-        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
-                                         encoding="utf-8") as fichier:
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".js", delete=False, encoding="utf-8"
+        ) as fichier:
             fichier.write(script)
             chemin = fichier.name
         try:
-            sortie = subprocess.run(["node", "--check", chemin],
-                                    capture_output=True, text=True, timeout=60)
+            sortie = subprocess.run(
+                ["node", "--check", chemin], capture_output=True, text=True, timeout=60
+            )
         finally:
             os.unlink(chemin)
         assert sortie.returncode == 0, (
@@ -1816,9 +1911,9 @@ class TestTheServedJavaScriptActuallyRuns:
         assert tag in bloc, f"le modele recommande n'apparait pas : {bloc[:200]}"
         marge = re.search(r"marge ([\d.]+) Gio", bloc)
         assert marge, f"la marge n'est pas affichee : {bloc[:200]}"
-        assert float(marge.group(1)) == reco["margin_gb"], (
-            "la marge affichee ne correspond pas a la marge calculee"
-        )
+        assert (
+            float(marge.group(1)) == reco["margin_gb"]
+        ), "la marge affichee ne correspond pas a la marge calculee"
         assert reco["maximum"]["tag"] in bloc, "le choix maximal n'est pas affiche"
 
         liste = rendu["model-select"]["innerHTML"]
@@ -1829,16 +1924,15 @@ class TestTheServedJavaScriptActuallyRuns:
         # `TestOnlyOpenSourceIsOffered`.
         for entree in payload["models"]:
             if entree["osi_approved"]:
-                assert f'value="{entree["tag"]}"' in liste, (
-                    f"{entree['tag']} approuve OSI, absent de la liste rendue"
-                )
+                assert (
+                    f'value="{entree["tag"]}"' in liste
+                ), f"{entree['tag']} approuve OSI, absent de la liste rendue"
 
         memoire = rendu["memory-value"]["textContent"]
         assert "Gio" in memoire and "Non mesuree" not in memoire
 
         assert "pas mesuree" in rendu["model-disclaimer"]["textContent"], (
-            "la reserve DEC-006 doit etre lisible dans la page, pas seulement "
-            "dans le payload"
+            "la reserve DEC-006 doit etre lisible dans la page, pas seulement " "dans le payload"
         )
 
     def test_the_page_says_so_when_nothing_is_measured(self):
@@ -1878,9 +1972,15 @@ def element_coche(identifiant):
     """Un element de DOM deja coche, pour le harnais de rendu."""
     return {
         identifiant: {
-            "id": identifiant, "checked": True, "textContent": "",
-            "innerHTML": "", "className": "", "title": "", "value": "",
-            "disabled": False, "style": {},
+            "id": identifiant,
+            "checked": True,
+            "textContent": "",
+            "innerHTML": "",
+            "className": "",
+            "title": "",
+            "value": "",
+            "disabled": False,
+            "style": {},
         }
     }
 
@@ -1958,9 +2058,7 @@ class TestOnlyOpenSourceIsOffered:
         payload = module.status_payload()
         politique = payload["license_policy"]
 
-        assert politique["reference_url"] == (
-            load_core_bridge().catalog_module.OSI_REFERENCE_URL
-        )
+        assert politique["reference_url"] == (load_core_bridge().catalog_module.OSI_REFERENCE_URL)
         assert politique["reference_url"] in politique["notice"]
         assert "N'A PAS ete reverifiee" in politique["notice"]
         assert "MIT et Apache-2.0" in politique["notice"]
@@ -1995,7 +2093,7 @@ class TestOnlyOpenSourceIsOffered:
         pont = load_core_bridge()
 
         class ProfilLarge:
-            available_memory_bytes = 96 * 1024 ** 3
+            available_memory_bytes = 96 * 1024**3
             unified_memory = False
 
         module.apply_recommendation(ProfilLarge())
@@ -2004,9 +2102,9 @@ class TestOnlyOpenSourceIsOffered:
         reco = payload["recommendation"]
 
         sans_filtre = pont.recommend_for(ProfilLarge())
-        assert sans_filtre.maximum.tag not in approuves, (
-            "sans ce contraste le test ne prouverait rien"
-        )
+        assert (
+            sans_filtre.maximum.tag not in approuves
+        ), "sans ce contraste le test ne prouverait rien"
         assert reco["recommended"]["tag"] in approuves
         assert reco["maximum"]["tag"] in approuves
 
@@ -2034,12 +2132,9 @@ class TestOnlyOpenSourceIsOffered:
             assert entree["fits"] is (tag in tiennent), tag
 
         restreints_qui_tiennent = [
-            tag for tag, e in servis.items()
-            if e["fits"] and not e["osi_approved"]
+            tag for tag, e in servis.items() if e["fits"] and not e["osi_approved"]
         ]
-        assert restreints_qui_tiennent, (
-            "sans ce cas le test ne prouverait rien sur cette machine"
-        )
+        assert restreints_qui_tiennent, "sans ce cas le test ne prouverait rien sur cette machine"
 
     @pytest.mark.skipif(shutil.which("node") is None, reason="Node absent")
     def test_the_rendered_list_carries_no_non_osi_tag_by_default(self):
@@ -2054,14 +2149,13 @@ class TestOnlyOpenSourceIsOffered:
         assert rendus, "la liste rendue est vide"
         for tag in rendus:
             assert tag in politique["approved"], (
-                f"{tag} n'est pas approuve OSI et figure pourtant dans le "
-                f"choix par defaut"
+                f"{tag} n'est pas approuve OSI et figure pourtant dans le " f"choix par defaut"
             )
         for tag in list(politique["restricted"]) + list(politique["undetermined"]):
             assert tag not in rendus, f"{tag} propose par defaut"
-        assert sorted(rendus) == sorted(politique["approved"]), (
-            "toutes les entrees approuvees doivent etre proposees"
-        )
+        assert sorted(rendus) == sorted(
+            politique["approved"]
+        ), "toutes les entrees approuvees doivent etre proposees"
 
     @pytest.mark.skipif(shutil.which("node") is None, reason="Node absent")
     def test_the_excluded_ones_reappear_on_demand_in_two_distinct_groups(self):
@@ -2069,7 +2163,8 @@ class TestOnlyOpenSourceIsOffered:
         module = launcher_mesure("_rendu_bascule")
         payload = module.status_payload()
         rendu = render_launcher_ui(
-            extract_launcher_script(module), payload,
+            extract_launcher_script(module),
+            payload,
             elements=element_coche("show-restricted"),
         )
         liste = rendu["model-select"]["innerHTML"]
@@ -2082,9 +2177,9 @@ class TestOnlyOpenSourceIsOffered:
         libelles = libelles_de_groupes(liste)
         restreint = [texte for texte in libelles if "NON approuvee OSI" in texte]
         non_verifie = [texte for texte in libelles if "NON VERIFIEE" in texte]
-        assert len(restreint) == 1 and len(non_verifie) == 1, (
-            f"les deux motifs d'exclusion doivent former deux groupes : {libelles}"
-        )
+        assert (
+            len(restreint) == 1 and len(non_verifie) == 1
+        ), f"les deux motifs d'exclusion doivent former deux groupes : {libelles}"
         assert restreint[0] != non_verifie[0]
 
     @pytest.mark.skipif(shutil.which("node") is None, reason="Node absent")
@@ -2101,9 +2196,9 @@ class TestOnlyOpenSourceIsOffered:
 
         rendu = render_launcher_ui(extract_launcher_script(module), payload)
         liste = rendu["model-select"]["innerHTML"]
-        assert f'value="{restreint}" selected' in liste, (
-            "le modele retenu doit rester dans la liste, meme ecarte par defaut"
-        )
+        assert (
+            f'value="{restreint}" selected' in liste
+        ), "le modele retenu doit rester dans la liste, meme ecarte par defaut"
         assert rendu["model-select"]["value"] == restreint
 
     @pytest.mark.skipif(shutil.which("node") is None, reason="Node absent")
@@ -2120,9 +2215,9 @@ class TestOnlyOpenSourceIsOffered:
         assert politique["reference_url"] in bloc
 
         reco = rendu["model-recommendation"]["innerHTML"]
-        assert politique["scope_notice"] in reco, (
-            "le perimetre de la recommandation doit etre dit, pas suppose"
-        )
+        assert (
+            politique["scope_notice"] in reco
+        ), "le perimetre de la recommandation doit etre dit, pas suppose"
 
 
 class TestTheFiveMemoryTiersAreRendered:
@@ -2137,9 +2232,7 @@ class TestTheFiveMemoryTiersAreRendered:
         pont = load_core_bridge()
         groupes = module.status_payload()["memory_tier_groups"]
 
-        attendus = [
-            (tier.tier_id, tier.label) for tier in pont.catalog_module.MEMORY_TIERS
-        ]
+        attendus = [(tier.tier_id, tier.label) for tier in pont.catalog_module.MEMORY_TIERS]
         assert [(g["tier_id"], g["label"]) for g in groupes] == attendus
         assert len(groupes) == 5
 
@@ -2183,13 +2276,11 @@ class TestTheFiveMemoryTiersAreRendered:
         libelles = libelles_de_groupes(rendu["model-select"]["innerHTML"])
 
         attendus = [g["label"] for g in payload["memory_tier_groups"]]
-        assert len(libelles) == len(attendus), (
-            f"cinq groupes attendus par defaut, rendus : {libelles}"
-        )
+        assert len(libelles) == len(
+            attendus
+        ), f"cinq groupes attendus par defaut, rendus : {libelles}"
         for libelle, attendu in zip(libelles, attendus):
-            assert libelle.startswith(attendu), (
-                f"palier rendu hors ordre ou renomme : {libelle!r}"
-            )
+            assert libelle.startswith(attendu), f"palier rendu hors ordre ou renomme : {libelle!r}"
 
     @pytest.mark.skipif(shutil.which("node") is None, reason="Node absent")
     def test_a_tier_beyond_the_machine_is_marked_not_removed(self):
@@ -2201,7 +2292,7 @@ class TestTheFiveMemoryTiersAreRendered:
         module = launcher_mesure("_rendu_palier_hors_capacite")
 
         class ProfilEtroit:
-            available_memory_bytes = 6 * 1024 ** 3
+            available_memory_bytes = 6 * 1024**3
             unified_memory = False
 
         module.apply_recommendation(ProfilEtroit())
@@ -2215,14 +2306,12 @@ class TestTheFiveMemoryTiersAreRendered:
         assert len(libelles) == 5, "un palier hors capacite reste rendu"
 
         par_tag = {e["tag"]: e for e in payload["models"]}
-        trop_lourds = [
-            t for t in tags_rendus(liste) if par_tag[t]["fits"] is False
-        ]
+        trop_lourds = [t for t in tags_rendus(liste) if par_tag[t]["fits"] is False]
         assert trop_lourds, "sans modele trop lourd le marquage ne prouve rien"
         for tag in trop_lourds:
-            assert f'>○ ✕ {tag} ' in liste or f'>● ✕ {tag} ' in liste, (
-                f"{tag} ne tient pas et n'est pas marque dans la liste"
-            )
+            assert (
+                f">○ ✕ {tag} " in liste or f">● ✕ {tag} " in liste
+            ), f"{tag} ne tient pas et n'est pas marque dans la liste"
 
 
 class TestInstalledModelsAreVisible:
@@ -2271,16 +2360,13 @@ class TestInstalledModelsAreVisible:
         rendu = render_launcher_ui(extract_launcher_script(module), payload)
         liste = rendu["model-select"]["innerHTML"]
 
-        assert re.search(r'<option value="qwen3:8b"[^>]*>● qwen3:8b[^<]*deja installe',
-                         liste), (
-            f"qwen3:8b n'est pas marque comme installe : {liste[:400]}"
-        )
-        non_installe = re.search(
-            r'<option value="mistral:7b"[^>]*>(○[^<]*)</option>', liste
-        )
-        assert non_installe and "non installe" in non_installe.group(1), (
-            "un modele absent doit etre dit absent, pas laisse muet"
-        )
+        assert re.search(
+            r'<option value="qwen3:8b"[^>]*>● qwen3:8b[^<]*deja installe', liste
+        ), f"qwen3:8b n'est pas marque comme installe : {liste[:400]}"
+        non_installe = re.search(r'<option value="mistral:7b"[^>]*>(○[^<]*)</option>', liste)
+        assert non_installe and "non installe" in non_installe.group(
+            1
+        ), "un modele absent doit etre dit absent, pas laisse muet"
 
         bloc = rendu["model-recommendation"]["innerHTML"]
         assert "Deja telecharges sur cette machine" in bloc
@@ -2289,13 +2375,11 @@ class TestInstalledModelsAreVisible:
     @pytest.mark.skipif(shutil.which("node") is None, reason="Node absent")
     def test_the_page_says_so_when_nothing_is_downloaded(self):
         module = launcher_mesure("_rendu_rien_installe")
-        rendu = render_launcher_ui(
-            extract_launcher_script(module), module.status_payload()
-        )
+        rendu = render_launcher_ui(extract_launcher_script(module), module.status_payload())
         bloc = rendu["model-recommendation"]["innerHTML"]
-        assert "Aucun modele du catalogue n'est telecharge" in bloc, (
-            f"l'absence doit etre ecrite, pas deduite d'une ligne vide : {bloc}"
-        )
+        assert (
+            "Aucun modele du catalogue n'est telecharge" in bloc
+        ), f"l'absence doit etre ecrite, pas deduite d'une ligne vide : {bloc}"
 
     @pytest.mark.skipif(shutil.which("node") is None, reason="Node absent")
     def test_the_recommended_model_says_whether_it_is_already_there(self):
@@ -2307,9 +2391,7 @@ class TestInstalledModelsAreVisible:
         assert "non installe, a telecharger" in rendu["model-recommendation"]["innerHTML"]
 
         module2 = launcher_mesure("_rendu_reco_deja_la", installes=[tag])
-        rendu2 = render_launcher_ui(
-            extract_launcher_script(module2), module2.status_payload()
-        )
+        rendu2 = render_launcher_ui(extract_launcher_script(module2), module2.status_payload())
         assert "deja installe" in rendu2["model-recommendation"]["innerHTML"]
 
 
@@ -2383,7 +2465,10 @@ class TestLauncherRunsUnderTheSystemPython:
         """
         sortie = subprocess.run(
             [self.python39, "-c", "import promptforge"],
-            capture_output=True, text=True, cwd=str(BASE_DIR), timeout=60,
+            capture_output=True,
+            text=True,
+            cwd=str(BASE_DIR),
+            timeout=60,
         )
         assert sortie.returncode != 0, (
             "`import promptforge` fonctionne desormais sous 3.9 : le "
@@ -2409,11 +2494,13 @@ class TestLauncherRunsUnderTheSystemPython:
         )
         sortie = subprocess.run(
             [self.python39, "-c", programme],
-            capture_output=True, text=True, cwd=str(BASE_DIR), timeout=120,
+            capture_output=True,
+            text=True,
+            cwd=str(BASE_DIR),
+            timeout=120,
         )
         assert sortie.returncode == 0, (
-            "`launcher.py` ne tourne plus sous le Python systeme :\n"
-            + sortie.stderr[-2000:]
+            "`launcher.py` ne tourne plus sous le Python systeme :\n" + sortie.stderr[-2000:]
         )
         resultat = _json.loads(sortie.stdout.strip().splitlines()[-1])
         assert resultat["python"] == "3.9"
@@ -2435,9 +2522,9 @@ class TestLauncherRunsUnderTheSystemPython:
         assert resultat["approuves"] == list(
             pont.license_qualification()["approved"]
         ), "la qualification de licence doit tenir sous 3.9"
-        assert resultat["modele"] in resultat["approuves"], (
-            "le modele recommande sous 3.9 doit rester approuve OSI"
-        )
+        assert (
+            resultat["modele"] in resultat["approuves"]
+        ), "le modele recommande sous 3.9 doit rester approuve OSI"
 
     def test_the_bridge_registers_modules_before_executing_them(self):
         """Le piege mesure de `core_loader`, verrouille pour de bon.
@@ -2465,7 +2552,10 @@ class TestLauncherRunsUnderTheSystemPython:
         )
         sortie = subprocess.run(
             [self.python39, "-c", programme],
-            capture_output=True, text=True, cwd=str(BASE_DIR), timeout=60,
+            capture_output=True,
+            text=True,
+            cwd=str(BASE_DIR),
+            timeout=60,
         )
         assert "SANS_INSCRIPTION_ECHOUE" in sortie.stdout, (
             "la recette naive passe desormais sous 3.9 ; verifier que "

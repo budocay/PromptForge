@@ -49,22 +49,29 @@ all = [
 promptforge = "promptforge.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/budocay/PrompForge"
-Repository = "https://github.com/budocay/PrompForge"
-Issues = "https://github.com/budocay/PrompForge/issues"
+Homepage = "https://github.com/budocay/PromptForge"
+Repository = "https://github.com/budocay/PromptForge"
+Issues = "https://github.com/budocay/PromptForge/issues"
 
 [tool.setuptools.packages.find]
 include = ["promptforge*"]
 
 [tool.black]
 line-length = 100
-target-version = ["py310", "py311", "py312"]
+target-version = ["py310"]
 
 [tool.ruff]
 line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP"]
 ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+markers = [
+    "integration: appelle un vrai service (Ollama, OSV.dev) ; ignore si absent",
+    "slow: test long (appels reels a un modele)",
+]

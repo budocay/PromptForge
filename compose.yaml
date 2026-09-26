@@ -33,6 +33,8 @@ services:
     environment:
       - OLLAMA_HOST=http://host.docker.internal:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:8b}
+      # Delai d'une generation Ollama, en secondes (voir .env.example)
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-600}
       - PROMPTFORGE_DATA_PATH=/data
     volumes:
       # Base SQLite et projets crees depuis l'interface

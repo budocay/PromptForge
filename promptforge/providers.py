@@ -3,13 +3,13 @@ Provider Ollama pour le reformatage intelligent des prompts.
 Gère la communication avec Ollama en local.
 """
 
-import subprocess
 import json
 import os
-from typing import Optional
-from dataclasses import dataclass, field
-import urllib.request
+import re
+import subprocess
 import urllib.error
+import urllib.request
+from dataclasses import dataclass, field
 
 from .logging_config import get_logger
 
@@ -39,6 +39,26 @@ class OllamaTimeoutError(OllamaError, TimeoutError):
         super().__init__(build_timeout_message(model, timeout))
 
 
+class OllamaModelNotFoundError(OllamaError):
+    """Ollama a repondu 404 : le modele demande n'est pas installe.
+
+    Avant cette classe, ce cas remontait comme un ``None`` indistinct et
+    l'utilisateur ne voyait que ``HTTP Error 404: Not Found``, sans savoir
+    quel modele manquait ni comment l'installer.
+
+    Attributes:
+        model: Le modele introuvable.
+    """
+
+    def __init__(self, model: str) -> None:
+        self.model = model
+        super().__init__(
+            f"Le modele '{model}' n'est pas installe dans Ollama. "
+            f"Installe-le avec `ollama pull {model}`, ou choisis un modele "
+            f"deja present (`ollama list`) via OLLAMA_MODEL ou --model."
+        )
+
+
 # Delai par defaut, en secondes, pour une generation Ollama.
 #
 # Justification chiffree. Mesure de premiere main du 2026-09-07 sur cette
@@ -64,6 +84,17 @@ DEFAULT_OLLAMA_TIMEOUT = 600
 # OLLAMA_MODEL : lecture directe dans os.environ, sans fichier de config.
 OLLAMA_TIMEOUT_ENV_VAR = "OLLAMA_TIMEOUT"
 
+# Modele par defaut, identique pour la CLI, l'interface web et Docker
+# (`compose.yaml`). La CLI utilisait auparavant `llama3.1`, que peu de gens
+# ont installe : `promptforge format` echouait alors sur un 404.
+DEFAULT_OLLAMA_MODEL = "qwen3:8b"
+OLLAMA_MODEL_ENV_VAR = "OLLAMA_MODEL"
+
+
+def get_default_ollama_model() -> str:
+    """Modele Ollama par defaut : ``OLLAMA_MODEL`` s'il est defini et non vide."""
+    return os.environ.get(OLLAMA_MODEL_ENV_VAR, "").strip() or DEFAULT_OLLAMA_MODEL
+
 
 def get_default_ollama_timeout() -> int:
     """Recupere le delai de generation depuis l'environnement.
@@ -82,14 +113,18 @@ def get_default_ollama_timeout() -> int:
     except ValueError:
         logger.warning(
             "%s=%r n'est pas un entier, repli sur %s s",
-            OLLAMA_TIMEOUT_ENV_VAR, raw, DEFAULT_OLLAMA_TIMEOUT,
+            OLLAMA_TIMEOUT_ENV_VAR,
+            raw,
+            DEFAULT_OLLAMA_TIMEOUT,
         )
         return DEFAULT_OLLAMA_TIMEOUT
 
     if value <= 0:
         logger.warning(
             "%s=%s doit etre strictement positif, repli sur %s s",
-            OLLAMA_TIMEOUT_ENV_VAR, value, DEFAULT_OLLAMA_TIMEOUT,
+            OLLAMA_TIMEOUT_ENV_VAR,
+            value,
+            DEFAULT_OLLAMA_TIMEOUT,
         )
         return DEFAULT_OLLAMA_TIMEOUT
 
@@ -122,36 +157,33 @@ def get_default_ollama_url() -> str:
     """Récupère l'URL Ollama depuis l'environnement ou détecte automatiquement."""
     if "OLLAMA_HOST" in os.environ:
         return os.environ["OLLAMA_HOST"]
-    
+
     # Détecter WSL
     try:
-        with open("/proc/version", "r") as f:
+        with open("/proc/version") as f:
             if "microsoft" in f.read().lower():
                 return "http://host.docker.internal:11434"
-    except:
+    except OSError:
         pass
-    
+
     return "http://localhost:11434"
 
 
 @dataclass
 class OllamaConfig:
     base_url: str = field(default_factory=get_default_ollama_url)
-    model: str = "llama3.1"
+    model: str = field(default_factory=get_default_ollama_model)
     timeout: int = field(default_factory=get_default_ollama_timeout)
 
 
 class OllamaProvider:
-    def __init__(self, config: Optional[OllamaConfig] = None):
+    def __init__(self, config: OllamaConfig | None = None):
         self.config = config or OllamaConfig()
-    
+
     def is_available(self) -> bool:
         """Vérifie si Ollama est disponible et répond."""
         try:
-            req = urllib.request.Request(
-                f"{self.config.base_url}/api/tags",
-                method="GET"
-            )
+            req = urllib.request.Request(f"{self.config.base_url}/api/tags", method="GET")
             with urllib.request.urlopen(req, timeout=5) as response:
                 return response.status == 200
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
@@ -160,10 +192,7 @@ class OllamaProvider:
     def list_models(self) -> list[str]:
         """Liste les modèles disponibles dans Ollama."""
         try:
-            req = urllib.request.Request(
-                f"{self.config.base_url}/api/tags",
-                method="GET"
-            )
+            req = urllib.request.Request(f"{self.config.base_url}/api/tags", method="GET")
             with urllib.request.urlopen(req, timeout=10) as response:
                 data = json.loads(response.read().decode())
                 return [model["name"] for model in data.get("models", [])]
@@ -181,7 +210,7 @@ class OllamaProvider:
             logger.warning("Liste des modeles Ollama indisponible: %s", e)
             return []
 
-    def generate(self, prompt: str, system_prompt: str = "", num_ctx: int = 16384) -> Optional[str]:
+    def generate(self, prompt: str, system_prompt: str = "", num_ctx: int = 16384) -> str | None:
         """Génère une réponse via Ollama.
 
         Args:
@@ -210,21 +239,21 @@ class OllamaProvider:
                 "options": {
                     "temperature": 0.3,  # Plus déterministe pour le reformatage
                     "top_p": 0.9,
-                    "num_ctx": num_ctx  # Utiliser plus de contexte pour les gros prompts
-                }
+                    "num_ctx": num_ctx,  # Utiliser plus de contexte pour les gros prompts
+                },
             }
-            
+
             if system_prompt:
                 payload["system"] = system_prompt
-            
+
             data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(
                 f"{self.config.base_url}/api/generate",
                 data=data,
                 headers={"Content-Type": "application/json"},
-                method="POST"
+                method="POST",
             )
-            
+
             with urllib.request.urlopen(req, timeout=self.config.timeout) as response:
                 result = json.loads(response.read().decode())
                 return result.get("response")
@@ -234,11 +263,18 @@ class OllamaProvider:
             # et d'aucune des erreurs urllib : il n'etait rattrape par personne.
             logger.warning(
                 "Depassement du delai Ollama: modele=%s timeout=%ss",
-                self.config.model, self.config.timeout,
+                self.config.model,
+                self.config.timeout,
             )
             raise OllamaTimeoutError(self.config.model, self.config.timeout) from e
 
         except urllib.error.HTTPError as e:
+            if e.code == 404:
+                # Ollama repond 404 sur /api/generate quand le modele n'existe
+                # pas localement. C'est le cas le plus frequent d'echec apres
+                # une installation : on le nomme au lieu de rendre un None muet.
+                logger.error("Modele Ollama introuvable: %s", self.config.model)
+                raise OllamaModelNotFoundError(self.config.model) from e
             logger.error("Ollama a repondu %s: %s", e.code, e)
             return None
 
@@ -248,7 +284,8 @@ class OllamaProvider:
             if isinstance(e.reason, TimeoutError):
                 logger.warning(
                     "Depassement du delai Ollama a la connexion: modele=%s timeout=%ss",
-                    self.config.model, self.config.timeout,
+                    self.config.model,
+                    self.config.timeout,
                 )
                 raise OllamaTimeoutError(self.config.model, self.config.timeout) from e
             logger.error("Ollama injoignable (%s): %s", self.config.base_url, e)
@@ -265,14 +302,12 @@ class OllamaProvider:
                 ["ollama", "pull", model],
                 capture_output=True,
                 text=True,
-                timeout=600  # 10 minutes max pour le téléchargement
+                timeout=600,  # 10 minutes max pour le téléchargement
             )
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
-
-import re
 
 def is_markdown_format(text: str) -> bool:
     """
@@ -280,238 +315,237 @@ def is_markdown_format(text: str) -> bool:
     """
     # Patterns Markdown typiques
     markdown_patterns = [
-        r'^#{1,6}\s+',           # Headers: # ## ### etc.
-        r'\*\*[^*]+\*\*',        # Bold: **text**
-        r'^\s*[-*]\s+',          # Lists: - item ou * item
-        r'^\s*\d+\.\s+',         # Numbered lists: 1. item
-        r'^---+$',               # Horizontal rules: ---
-        r'```',                  # Code blocks
+        r"^#{1,6}\s+",  # Headers: # ## ### etc.
+        r"\*\*[^*]+\*\*",  # Bold: **text**
+        r"^\s*[-*]\s+",  # Lists: - item ou * item
+        r"^\s*\d+\.\s+",  # Numbered lists: 1. item
+        r"^---+$",  # Horizontal rules: ---
+        r"```",  # Code blocks
     ]
-    
+
     # Si on trouve plusieurs patterns Markdown, c'est du Markdown
     markdown_count = 0
     for pattern in markdown_patterns:
         if re.search(pattern, text, re.MULTILINE):
             markdown_count += 1
-    
+
     # Vérifier si des balises XML existent
-    has_xml = bool(re.search(r'<\w+>.*?</\w+>', text, re.DOTALL))
-    
+    has_xml = bool(re.search(r"<\w+>.*?</\w+>", text, re.DOTALL))
+
     # C'est du Markdown si on a 2+ patterns Markdown ET pas de XML
     return markdown_count >= 2 and not has_xml
 
 
-def convert_markdown_to_xml(text: str, profile_name: Optional[str] = None) -> str:
+def convert_markdown_to_xml(text: str, profile_name: str | None = None) -> str:
     """
     Convertit le Markdown généré par un petit modèle en XML structuré.
-    
+
     Cette fonction est un filet de sécurité pour les modèles qui ne suivent pas
     les instructions de format XML.
     """
     # Nettoyer le texte
     text = text.strip()
-    
+
     # Supprimer les blocs de code Markdown
-    text = re.sub(r'```\w*\n?', '', text)
-    text = re.sub(r'```', '', text)
-    
+    text = re.sub(r"```\w*\n?", "", text)
+    text = re.sub(r"```", "", text)
+
     # Supprimer les lignes de séparation ---
-    text = re.sub(r'^---+\s*$', '', text, flags=re.MULTILINE)
-    
+    text = re.sub(r"^---+\s*$", "", text, flags=re.MULTILINE)
+
     # Mapping des headers Markdown vers balises XML universelles (v2.0)
     # Balises harmonisées: <task>, <context>, <instructions>, <constraints>, <output_format>
     section_mapping = {
         # Task / Objectif
-        'objectif': 'task',
-        'objective': 'task',
-        'but': 'task',
-        'task': 'task',
-        'tâche': 'task',
-        'principal': 'task',
-        'main': 'task',
-        'goal': 'task',
-        'définition': 'task',
-        'definition': 'task',
-        
+        "objectif": "task",
+        "objective": "task",
+        "but": "task",
+        "task": "task",
+        "tâche": "task",
+        "principal": "task",
+        "main": "task",
+        "goal": "task",
+        "définition": "task",
+        "definition": "task",
         # Context
-        'contexte': 'context',
-        'context': 'context',
-        'background': 'context',
-        'technologies': 'context',
-        'stack': 'context',
-        'projet': 'context',
-        'project': 'context',
-        'environnement': 'context',
-        'environment': 'context',
-        
+        "contexte": "context",
+        "context": "context",
+        "background": "context",
+        "technologies": "context",
+        "stack": "context",
+        "projet": "context",
+        "project": "context",
+        "environnement": "context",
+        "environment": "context",
         # Instructions / Steps
-        'instructions': 'instructions',
-        'étapes': 'instructions',
-        'steps': 'instructions',
-        'procedure': 'instructions',
-        'procédure': 'instructions',
-        'actions': 'instructions',
-        'process': 'instructions',
-        'workflow': 'instructions',
-        
+        "instructions": "instructions",
+        "étapes": "instructions",
+        "steps": "instructions",
+        "procedure": "instructions",
+        "procédure": "instructions",
+        "actions": "instructions",
+        "process": "instructions",
+        "workflow": "instructions",
         # Requirements / Specifications
-        'specifications': 'requirements',
-        'spécifications': 'requirements',
-        'requirements': 'requirements',
-        'exigences': 'requirements',
-        'besoins': 'requirements',
-        'needs': 'requirements',
-        'features': 'requirements',
-        'fonctionnalités': 'requirements',
-        
+        "specifications": "requirements",
+        "spécifications": "requirements",
+        "requirements": "requirements",
+        "exigences": "requirements",
+        "besoins": "requirements",
+        "needs": "requirements",
+        "features": "requirements",
+        "fonctionnalités": "requirements",
         # Constraints
-        'contraintes': 'constraints',
-        'constraints': 'constraints',
-        'limites': 'constraints',
-        'limits': 'constraints',
-        'règles': 'constraints',
-        'rules': 'constraints',
-        'bonnes pratiques': 'constraints',
-        'best practices': 'constraints',
-        'restrictions': 'constraints',
-        
+        "contraintes": "constraints",
+        "constraints": "constraints",
+        "limites": "constraints",
+        "limits": "constraints",
+        "règles": "constraints",
+        "rules": "constraints",
+        "bonnes pratiques": "constraints",
+        "best practices": "constraints",
+        "restrictions": "constraints",
         # Output format
-        'format': 'output_format',
-        'output': 'output_format',
-        'sortie': 'output_format',
-        'résultat': 'output_format',
-        'result': 'output_format',
-        'attendu': 'output_format',
-        'expected': 'output_format',
-        'livrables': 'output_format',
-        'deliverables': 'output_format',
-        
+        "format": "output_format",
+        "output": "output_format",
+        "sortie": "output_format",
+        "résultat": "output_format",
+        "result": "output_format",
+        "attendu": "output_format",
+        "expected": "output_format",
+        "livrables": "output_format",
+        "deliverables": "output_format",
         # Thinking (pour GPT-5 Pro)
-        'thinking': 'thinking',
-        'raisonnement': 'thinking',
-        'reasoning': 'thinking',
-        'réflexion': 'thinking',
-        'analyse': 'thinking',
-        'analysis': 'thinking',
-        
+        "thinking": "thinking",
+        "raisonnement": "thinking",
+        "reasoning": "thinking",
+        "réflexion": "thinking",
+        "analyse": "thinking",
+        "analysis": "thinking",
         # Examples (few-shot)
-        'exemples': 'examples',
-        'examples': 'examples',
-        'exemple': 'examples',
-        'example': 'examples',
-        
+        "exemples": "examples",
+        "examples": "examples",
+        "exemple": "examples",
+        "example": "examples",
         # Autres
-        'fichiers': 'files',
-        'files': 'files',
-        'ressources': 'resources',
-        'resources': 'resources',
+        "fichiers": "files",
+        "files": "files",
+        "ressources": "resources",
+        "resources": "resources",
     }
-    
+
     # Trouver les sections avec headers Markdown
     sections = {}
     current_section = None
     current_content = []
-    
-    lines = text.split('\n')
-    
+
+    lines = text.split("\n")
+
     for line in lines:
         # Ignorer les lignes vides de séparation
-        if re.match(r'^---+\s*$', line):
+        if re.match(r"^---+\s*$", line):
             continue
-            
+
         # Détecter les headers Markdown (# ## ### etc.)
-        header_match = re.match(r'^#{1,6}\s+\**(.+?)\**\s*$', line)
-        
+        header_match = re.match(r"^#{1,6}\s+\**(.+?)\**\s*$", line)
+
         if header_match:
             # Sauvegarder la section précédente
             if current_section and current_content:
-                content = '\n'.join(current_content).strip()
+                content = "\n".join(current_content).strip()
                 # Nettoyer les --- restants
-                content = re.sub(r'\n---+\s*$', '', content)
-                content = re.sub(r'^---+\s*\n', '', content)
+                content = re.sub(r"\n---+\s*$", "", content)
+                content = re.sub(r"^---+\s*\n", "", content)
                 if content:
                     sections[current_section] = content
-            
+
             # Nouvelle section
             header_text = header_match.group(1).lower()
-            header_text = re.sub(r'\*+', '', header_text).strip()
-            
+            header_text = re.sub(r"\*+", "", header_text).strip()
+
             # Trouver le tag XML correspondant
             current_section = None
             for key, tag in section_mapping.items():
                 if key in header_text:
                     current_section = tag
                     break
-            
+
             # Si pas trouvé, utiliser un tag générique basé sur le header
             if not current_section:
                 # Créer un tag à partir du header
-                tag_name = re.sub(r'[^a-z0-9]+', '_', header_text)
-                tag_name = tag_name.strip('_')
+                tag_name = re.sub(r"[^a-z0-9]+", "_", header_text)
+                tag_name = tag_name.strip("_")
                 if tag_name:
                     current_section = tag_name
                 else:
-                    current_section = 'section'
-            
+                    current_section = "section"
+
             current_content = []
         else:
             # Nettoyer le contenu
             cleaned_line = line
             # Supprimer le bold Markdown
-            cleaned_line = re.sub(r'\*\*([^*]+)\*\*', r'\1', cleaned_line)
+            cleaned_line = re.sub(r"\*\*([^*]+)\*\*", r"\1", cleaned_line)
             # Convertir les tirets de liste
-            cleaned_line = re.sub(r'^\s*[-*]\s+', '- ', cleaned_line)
+            cleaned_line = re.sub(r"^\s*[-*]\s+", "- ", cleaned_line)
             # Supprimer les backticks inline
-            cleaned_line = re.sub(r'`([^`]+)`', r'\1', cleaned_line)
-            
+            cleaned_line = re.sub(r"`([^`]+)`", r"\1", cleaned_line)
+
             if cleaned_line.strip():
                 current_content.append(cleaned_line)
-    
+
     # Sauvegarder la dernière section
     if current_section and current_content:
-        content = '\n'.join(current_content).strip()
-        content = re.sub(r'\n---+\s*$', '', content)
-        content = re.sub(r'^---+\s*\n', '', content)
+        content = "\n".join(current_content).strip()
+        content = re.sub(r"\n---+\s*$", "", content)
+        content = re.sub(r"^---+\s*\n", "", content)
         if content:
             sections[current_section] = content
-    
+
     # Si pas de sections trouvées, créer une structure minimale
     if not sections:
         # Nettoyer le Markdown
-        cleaned = re.sub(r'#{1,6}\s+', '', text)
-        cleaned = re.sub(r'\*\*([^*]+)\*\*', r'\1', cleaned)
-        cleaned = re.sub(r'^[-*]\s+', '- ', cleaned, flags=re.MULTILINE)
-        cleaned = re.sub(r'^---+\s*$', '', cleaned, flags=re.MULTILINE)
-        
+        cleaned = re.sub(r"#{1,6}\s+", "", text)
+        cleaned = re.sub(r"\*\*([^*]+)\*\*", r"\1", cleaned)
+        cleaned = re.sub(r"^[-*]\s+", "- ", cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r"^---+\s*$", "", cleaned, flags=re.MULTILINE)
+
         sections = {
-            'task': 'Accomplir la tâche demandée par l\'utilisateur.',
-            'context': 'Contexte extrait de la demande.',
-            'instructions': cleaned.strip(),
-            'output_format': 'Réponse structurée et complète.'
+            "task": "Accomplir la tâche demandée par l'utilisateur.",
+            "context": "Contexte extrait de la demande.",
+            "instructions": cleaned.strip(),
+            "output_format": "Réponse structurée et complète.",
         }
-    
+
     # Construire le XML
     xml_parts = []
-    
+
     # Ordre préféré des balises (format universel v2.0)
     preferred_order = [
-        'task', 'context', 'thinking', 'instructions', 
-        'requirements', 'constraints', 'examples',
-        'output_format', 'files', 'resources'
+        "task",
+        "context",
+        "thinking",
+        "instructions",
+        "requirements",
+        "constraints",
+        "examples",
+        "output_format",
+        "files",
+        "resources",
     ]
-    
+
     # D'abord les sections dans l'ordre préféré
     for tag in preferred_order:
         if tag in sections:
             content = sections[tag]
-            xml_parts.append(f'<{tag}>\n{content}\n</{tag}>')
-    
+            xml_parts.append(f"<{tag}>\n{content}\n</{tag}>")
+
     # Puis les autres sections
     for tag, content in sections.items():
         if tag not in preferred_order:
-            xml_parts.append(f'<{tag}>\n{content}\n</{tag}>')
-    
-    return '\n\n'.join(xml_parts)
+            xml_parts.append(f"<{tag}>\n{content}\n</{tag}>")
+
+    return "\n\n".join(xml_parts)
 
 
 REFORMAT_SYSTEM_PROMPT = """Tu transformes des demandes utilisateur en prompts XML ultra-structurés.
@@ -576,27 +610,29 @@ RAPPEL:
 
 
 def format_prompt_with_ollama(
-    raw_prompt: str, 
+    raw_prompt: str,
     project_context: str,
-    provider: Optional[OllamaProvider] = None,
-    profile_name: Optional[str] = None,
-    return_conversion_info: bool = False
-) -> Optional[str]:
+    provider: OllamaProvider | None = None,
+    profile_name: str | None = None,
+    return_conversion_info: bool = False,
+) -> str | None:
     """
     Reformate un prompt en utilisant Ollama.
-    
+
     Args:
         raw_prompt: Le prompt brut de l'utilisateur
         project_context: Le contenu du fichier de configuration projet
         provider: Instance OllamaProvider (créée si non fournie)
         profile_name: Clé de `PRESET_PROFILES` (claude_opus_5, gpt_5.1, universel, etc.)
         return_conversion_info: Si True, retourne un tuple (result, was_converted_from_markdown)
-    
+
     Returns:
         Le prompt reformaté ou None en cas d'erreur
         Si return_conversion_info=True: tuple (prompt, was_converted)
 
     Raises:
+        OllamaModelNotFoundError: propage tel quel quand le modele n'est pas
+            installe, pour que le message dise lequel et comment l'installer.
         OllamaTimeoutError: propage volontairement le depassement de delai de
             `OllamaProvider.generate()`, au lieu de l'aplatir en None. C'est ce
             qui permet a `PromptForge.format_prompt()` de distinguer « le
@@ -604,17 +640,16 @@ def format_prompt_with_ollama(
     """
     if provider is None:
         provider = OllamaProvider()
-    
+
     if not provider.is_available():
         return (None, False) if return_conversion_info else None
-    
+
     # Utiliser un profil si spécifié
     if profile_name:
-        from .profiles import get_profile, build_reformat_prompt
+        from .profiles import build_reformat_prompt, get_profile
+
         profile = get_profile(profile_name)
-        system_prompt, full_prompt = build_reformat_prompt(
-            raw_prompt, project_context, profile
-        )
+        system_prompt, full_prompt = build_reformat_prompt(raw_prompt, project_context, profile)
     else:
         # Fallback simple
         system_prompt = REFORMAT_SYSTEM_PROMPT
@@ -634,7 +669,7 @@ Réécris cette demande en prompt structuré."""
 
     # Générer avec Ollama
     result = provider.generate(full_prompt, system_prompt)
-    
+
     # POST-TRAITEMENT: Convertir Markdown -> XML si nécessaire
     # Les petits modèles (8B et moins) génèrent souvent du Markdown
     # même quand on leur demande du XML
@@ -643,7 +678,7 @@ Réécris cette demande en prompt structuré."""
         if is_markdown_format(result):
             result = convert_markdown_to_xml(result, profile_name)
             was_converted = True
-    
+
     if return_conversion_info:
         return (result, was_converted)
     return result

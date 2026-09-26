@@ -4,13 +4,12 @@ Handles Ollama status checking and model management.
 """
 
 import os
-from typing import Optional
 
 from ..core import PromptForge
 
 # Instance globale
-_forge: Optional[PromptForge] = None
-_base_path: Optional[str] = None
+_forge: PromptForge | None = None
+_base_path: str | None = None
 
 
 def set_base_path(path: str):
@@ -32,12 +31,13 @@ def get_forge() -> PromptForge:
             _forge = PromptForge()
 
         # Configurer Ollama avec les variables d'environnement
-        ollama_model = os.environ.get("OLLAMA_MODEL", "qwen3:8b")
-        ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-        _forge.configure_ollama(model=ollama_model, base_url=ollama_host)
+        _forge.configure_ollama()
+        ollama_model = _forge.ollama.config.model
+        ollama_host = _forge.ollama.config.base_url
 
         # Import du logger
         from ..logging_config import get_logger
+
         logger = get_logger(__name__)
         logger.info(f"Ollama configured: {ollama_host} | Model: {ollama_model}")
     return _forge
@@ -48,8 +48,10 @@ def check_ollama_status() -> str:
     forge = get_forge()
     if forge.ollama.is_available():
         models = forge.ollama.list_models()
-        model_list = ', '.join(models[:5]) if models else 'aucun'
-        return f"✅ Ollama connecté | Modèle: {forge.ollama.config.model} | Disponibles: {model_list}"
+        model_list = ", ".join(models[:5]) if models else "aucun"
+        return (
+            f"✅ Ollama connecté | Modèle: {forge.ollama.config.model} | Disponibles: {model_list}"
+        )
     return "❌ Ollama non disponible - Lancez 'ollama serve'"
 
 
@@ -81,6 +83,7 @@ def change_ollama_model(model_name: str) -> str:
         forge.ollama.config.model = model_name
 
         from ..logging_config import get_logger
+
         logger = get_logger(__name__)
         logger.info(f"Model changed to: {model_name}")
 

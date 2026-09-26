@@ -1,6 +1,6 @@
 # Docker Compose pour PromptForge + Ollama (sans GPU)
 # Utiliser si vous n'avez pas de GPU ou si les drivers posent problème
-# Usage: docker-compose -f docker-compose.cpu.yml up -d
+# Usage: docker compose -f docker/compose/docker-compose.cpu.yml up -d
 #
 # MODÈLES CPU RECOMMANDÉS (par ordre de préférence):
 # - phi4-mini (2.5GB) - Microsoft, excellent sur CPU, bon suivi d'instructions
@@ -66,6 +66,8 @@ services:
     environment:
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_MODEL=phi4-mini
+      # Delai d'une generation Ollama, en secondes (voir .env.example)
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-600}
     restart: unless-stopped
 
   # PromptForge CLI (interactif)
@@ -83,6 +85,8 @@ services:
     environment:
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_MODEL=phi4-mini
+      # Delai d'une generation Ollama, en secondes (voir .env.example)
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-600}
     stdin_open: true
     tty: true
     restart: "no"

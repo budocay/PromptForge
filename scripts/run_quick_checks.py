@@ -5,8 +5,8 @@ Quick Tests for Scanner Multi-Ecosystem Support
 Runs without pytest - standalone test script.
 """
 
-import sys
 import json
+import sys
 import tempfile
 from pathlib import Path
 
@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from promptforge.scanner import ProjectScanner, SecurityAlert
-from promptforge.security import get_security_guidelines, SecurityContext
+from promptforge.security import SecurityContext, get_security_guidelines
 
 print("=" * 60)
 print("TESTS DES PARSERS MULTI-ECOSYSTEMES")
@@ -54,9 +54,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
     project.mkdir()
     (project / "main.cpp").write_text("int main() { return 0; }")
     (project / "vcpkg.json").write_text(
-        json.dumps(
-            {"dependencies": ["boost", {"name": "openssl", "version>=": "3.0.0"}]}
-        )
+        json.dumps({"dependencies": ["boost", {"name": "openssl", "version>=": "3.0.0"}]})
     )
 
     scanner = ProjectScanner()
@@ -90,13 +88,11 @@ with tempfile.TemporaryDirectory() as tmpdir:
 with tempfile.TemporaryDirectory() as tmpdir:
     project = Path(tmpdir) / "project"
     project.mkdir()
-    (project / "CMakeLists.txt").write_text(
-        """
+    (project / "CMakeLists.txt").write_text("""
 cmake_minimum_required(VERSION 3.20)
 find_package(OpenSSL 3.0 REQUIRED)
 find_package(Boost 1.80)
-"""
-    )
+""")
 
     scanner = ProjectScanner()
     cmake_pkgs = scanner._parse_cmake_packages(project)

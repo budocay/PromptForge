@@ -8,8 +8,8 @@ vérifié et ce qui ne l'est pas.
 ## Monter l'environnement
 
 ```bash
-git clone https://github.com/budocay/PrompForge.git
-cd PrompForge
+git clone https://github.com/budocay/PromptForge.git
+cd PromptForge
 python3 -m venv .venv
 source .venv/bin/activate          # Windows : .venv\Scripts\activate
 pip install -e ".[all]"
@@ -24,10 +24,8 @@ Vérifie :
 python start.py --check
 ```
 
-**Active toujours le venv avant d'utiliser le Makefile.** Les cibles appellent
-`pytest`, `ruff`, `black` et `pip` sans préfixe. Sans venv actif, `make test` et
-`make lint` échouent sur `No such file or directory` — ce n'est pas un bug du
-dépôt.
+Le Makefile appelle `python3 -m pytest` / `-m ruff` / `-m black` : avec le venv
+actif, c'est celui du venv. Sinon, indique-le : `make test PYTHON=.venv/bin/python`.
 
 ---
 
@@ -64,33 +62,27 @@ make lint           # ruff
 make format-check   # black en lecture seule
 ```
 
-### Dette de style existante
-
-`make lint` et `make format-check` **ne sont pas verts aujourd'hui** sur la base
-existante. C'est une dette connue et tracée, pas un défaut de ta PR, et
-`make check` (qui enchaîne lint + format-check + test) est rouge pour la même
-raison.
-
-Conséquence pratique : **ne reformate pas tout le dépôt dans une PR de
-fonctionnalité.** Un `black .` global noierait ta modification dans des milliers
-de lignes de diff cosmétique et la rendrait irrelisable. Formate uniquement les
-fichiers que tu touches.
+`make lint` et `make format-check` sont verts sur toute la base : garde-les
+verts. `make check` enchaîne lint, format-check et tests.
 
 ---
 
-## Pas d'intégration continue
+## Intégration continue
 
-Ce dépôt n'a **aucune CI** : il n'y a pas de `.github/workflows/`, rien ne
-s'exécute automatiquement sur une PR. Toutes les vérifications sont locales et
-reposent sur toi.
+`.github/workflows/ci.yml` tourne sur chaque PR et chaque push sur `main` :
 
-Avant de proposer une modification, lance au minimum :
+- `ruff check` et `black --check` (versions figées dans le workflow) ;
+- `pytest -m "not integration"` sous Python 3.10, 3.11 et 3.12.
+
+Aucun Ollama ne tourne sur le runner : ses tests d'intégration sont ignorés, et
+les tests marqués `integration` (appels réels à OSV.dev) sont exclus. Lance-les
+en local si tu touches à ces chemins, et dis-le dans la PR.
+
+Avant de proposer une modification :
 
 ```bash
-make test
+make check
 ```
-
-et indique dans la PR ce que tu as exécuté, avec la sortie.
 
 ---
 
@@ -104,7 +96,8 @@ promptforge/
 ├── profiles.py      9 profils de modèles cibles
 ├── cli.py           interface argparse
 ├── tokens.py        estimation de tokens (tiktoken ou heuristique)
-├── scanner.py       scanner de projets
+├── scanner/         scanner de projets (signatures, models, lockfiles,
+│                    config_generator, core)
 ├── security.py      CVE via OSV.dev, règles de sécurité
 ├── models_catalog.py  catalogue des modèles Ollama locaux
 ├── hardware.py      mesure de la machine
@@ -113,6 +106,8 @@ promptforge/
 tests/               pytest
 docker/              Dockerfile, Dockerfile.web, compose/ (6 variantes GPU)
 compose.yaml         compose par défaut, à la racine
+launcher.py          tableau de bord local (port 7850) ; son interface est
+                     dans assets/launcher.html
 scripts/             outils de build
 docs/                documentation
 ```

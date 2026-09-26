@@ -8,10 +8,11 @@ language-specific guidelines (C/C++, Swift, Ruby, PHP).
 """
 
 import pytest
+
 from promptforge.security import (
-    get_security_guidelines,
     SecurityContext,
     detect_dev_context,
+    get_security_guidelines,
 )
 
 
@@ -24,7 +25,7 @@ class TestFrontendFrameworkGuidelines:
             is_dev=True,
             languages=["javascript"],
             security_keywords_found=["react", "frontend"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
@@ -37,7 +38,7 @@ class TestFrontendFrameworkGuidelines:
             is_dev=True,
             languages=["typescript"],
             security_keywords_found=["angular", "frontend"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
@@ -49,7 +50,7 @@ class TestFrontendFrameworkGuidelines:
             is_dev=True,
             languages=["javascript"],
             security_keywords_found=["vue", "frontend"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
@@ -61,17 +62,17 @@ class TestFrontendFrameworkGuidelines:
             is_dev=True,
             languages=["javascript", "typescript"],
             security_keywords_found=["react", "vue", "angular", "frontend"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
         # Should mention XSS or sanitization
         has_xss_guidance = (
-            "XSS" in guidelines or
-            "sanitiz" in guidelines.lower() or
-            "DOMPurify" in guidelines or
-            "echapper" in guidelines.lower() or
-            "innerHTML" in guidelines
+            "XSS" in guidelines
+            or "sanitiz" in guidelines.lower()
+            or "DOMPurify" in guidelines
+            or "echapper" in guidelines.lower()
+            or "innerHTML" in guidelines
         )
         assert has_xss_guidance
 
@@ -85,16 +86,16 @@ class TestPythonBackendFrameworkGuidelines:
             is_dev=True,
             languages=["python"],
             security_keywords_found=["django"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
         # Should mention Django or Python web security
         has_django_guidance = (
-            "Django" in guidelines or
-            "CSRF" in guidelines or
-            "login_required" in guidelines or
-            "Python Web" in guidelines
+            "Django" in guidelines
+            or "CSRF" in guidelines
+            or "login_required" in guidelines
+            or "Python Web" in guidelines
         )
         assert has_django_guidance
 
@@ -104,15 +105,15 @@ class TestPythonBackendFrameworkGuidelines:
             is_dev=True,
             languages=["python"],
             security_keywords_found=["fastapi"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
         has_fastapi_guidance = (
-            "FastAPI" in guidelines or
-            "Pydantic" in guidelines or
-            "Depends" in guidelines or
-            "Python Web" in guidelines
+            "FastAPI" in guidelines
+            or "Pydantic" in guidelines
+            or "Depends" in guidelines
+            or "Python Web" in guidelines
         )
         assert has_fastapi_guidance
 
@@ -122,14 +123,12 @@ class TestPythonBackendFrameworkGuidelines:
             is_dev=True,
             languages=["python"],
             security_keywords_found=["flask"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
         has_flask_guidance = (
-            "Flask" in guidelines or
-            "WTF" in guidelines or
-            "Python Web" in guidelines
+            "Flask" in guidelines or "WTF" in guidelines or "Python Web" in guidelines
         )
         assert has_flask_guidance
 
@@ -143,15 +142,15 @@ class TestNodeBackendFrameworkGuidelines:
             is_dev=True,
             languages=["javascript"],
             security_keywords_found=["express", "node"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
         has_express_guidance = (
-            "Express" in guidelines or
-            "helmet" in guidelines.lower() or
-            "Node" in guidelines or
-            "rate-limit" in guidelines.lower()
+            "Express" in guidelines
+            or "helmet" in guidelines.lower()
+            or "Node" in guidelines
+            or "rate-limit" in guidelines.lower()
         )
         assert has_express_guidance
 
@@ -161,15 +160,15 @@ class TestNodeBackendFrameworkGuidelines:
             is_dev=True,
             languages=["typescript"],
             security_keywords_found=["nestjs", "node"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
         has_nestjs_guidance = (
-            "NestJS" in guidelines or
-            "Guard" in guidelines or
-            "Pipe" in guidelines or
-            "Node" in guidelines
+            "NestJS" in guidelines
+            or "Guard" in guidelines
+            or "Pipe" in guidelines
+            or "Node" in guidelines
         )
         assert has_nestjs_guidance
 
@@ -183,15 +182,15 @@ class TestJavaFrameworkGuidelines:
             is_dev=True,
             languages=["java"],
             security_keywords_found=["spring", "springboot"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
         has_spring_guidance = (
-            "Spring" in guidelines or
-            "PreAuthorize" in guidelines or
-            "BCrypt" in guidelines or
-            "HttpSecurity" in guidelines
+            "Spring" in guidelines
+            or "PreAuthorize" in guidelines
+            or "BCrypt" in guidelines
+            or "HttpSecurity" in guidelines
         )
         assert has_spring_guidance
 
@@ -201,15 +200,15 @@ class TestJavaFrameworkGuidelines:
             is_dev=True,
             languages=["java"],
             security_keywords_found=["api"],
-            security_level="standard"
+            security_level="standard",
         )
         guidelines = get_security_guidelines(context)
 
         # Base Java guidelines
         has_java_guidance = (
-            "Java" in guidelines or
-            "PreparedStatement" in guidelines or
-            "Bean Validation" in guidelines
+            "Java" in guidelines
+            or "PreparedStatement" in guidelines
+            or "Bean Validation" in guidelines
         )
         assert has_java_guidance
 
@@ -223,15 +222,15 @@ class TestDotNetFrameworkGuidelines:
             is_dev=True,
             languages=["csharp"],
             security_keywords_found=["aspnet", "dotnet"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
         has_aspnet_guidance = (
-            "ASP.NET" in guidelines or
-            "Identity" in guidelines or
-            "[Authorize]" in guidelines or
-            "Anti-forgery" in guidelines
+            "ASP.NET" in guidelines
+            or "Identity" in guidelines
+            or "[Authorize]" in guidelines
+            or "Anti-forgery" in guidelines
         )
         assert has_aspnet_guidance
 
@@ -241,15 +240,15 @@ class TestDotNetFrameworkGuidelines:
             is_dev=True,
             languages=["csharp"],
             security_keywords_found=["database"],
-            security_level="standard"
+            security_level="standard",
         )
         guidelines = get_security_guidelines(context)
 
         has_csharp_guidance = (
-            "C#" in guidelines or
-            ".NET" in guidelines or
-            "Entity Framework" in guidelines or
-            "HtmlEncoder" in guidelines
+            "C#" in guidelines
+            or ".NET" in guidelines
+            or "Entity Framework" in guidelines
+            or "HtmlEncoder" in guidelines
         )
         assert has_csharp_guidance
 
@@ -263,16 +262,16 @@ class TestCCppGuidelines:
             is_dev=True,
             languages=["c"],
             security_keywords_found=["file"],
-            security_level="standard"
+            security_level="standard",
         )
         guidelines = get_security_guidelines(context)
 
         has_c_guidance = (
-            "C/C++" in guidelines or
-            "buffer" in guidelines.lower() or
-            "strcpy" in guidelines or
-            "snprintf" in guidelines or
-            "fgets" in guidelines
+            "C/C++" in guidelines
+            or "buffer" in guidelines.lower()
+            or "strcpy" in guidelines
+            or "snprintf" in guidelines
+            or "fgets" in guidelines
         )
         assert has_c_guidance
 
@@ -282,16 +281,16 @@ class TestCCppGuidelines:
             is_dev=True,
             languages=["cpp"],
             security_keywords_found=["api"],
-            security_level="standard"
+            security_level="standard",
         )
         guidelines = get_security_guidelines(context)
 
         has_cpp_guidance = (
-            "C/C++" in guidelines or
-            "RAII" in guidelines or
-            "fstack-protector" in guidelines or
-            "AddressSanitizer" in guidelines or
-            "buffer" in guidelines.lower()
+            "C/C++" in guidelines
+            or "RAII" in guidelines
+            or "fstack-protector" in guidelines
+            or "AddressSanitizer" in guidelines
+            or "buffer" in guidelines.lower()
         )
         assert has_cpp_guidance
 
@@ -301,16 +300,16 @@ class TestCCppGuidelines:
             is_dev=True,
             languages=["c", "cpp"],
             security_keywords_found=[],
-            security_level="standard"
+            security_level="standard",
         )
         guidelines = get_security_guidelines(context)
 
         # Should mention security compiler flags
         has_compiler_flags = (
-            "fstack-protector" in guidelines or
-            "FORTIFY_SOURCE" in guidelines or
-            "fPIE" in guidelines or
-            "Sanitizer" in guidelines
+            "fstack-protector" in guidelines
+            or "FORTIFY_SOURCE" in guidelines
+            or "fPIE" in guidelines
+            or "Sanitizer" in guidelines
         )
         assert has_compiler_flags
 
@@ -324,16 +323,16 @@ class TestSwiftGuidelines:
             is_dev=True,
             languages=["swift"],
             security_keywords_found=["api"],
-            security_level="standard"
+            security_level="standard",
         )
         guidelines = get_security_guidelines(context)
 
         has_swift_guidance = (
-            "Swift" in guidelines or
-            "iOS" in guidelines or
-            "Keychain" in guidelines or
-            "ATS" in guidelines or
-            "UserDefaults" in guidelines
+            "Swift" in guidelines
+            or "iOS" in guidelines
+            or "Keychain" in guidelines
+            or "ATS" in guidelines
+            or "UserDefaults" in guidelines
         )
         assert has_swift_guidance
 
@@ -343,14 +342,11 @@ class TestSwiftGuidelines:
             is_dev=True,
             languages=["swift"],
             security_keywords_found=["credentials", "password"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
-        has_keychain_guidance = (
-            "Keychain" in guidelines or
-            "UserDefaults" in guidelines
-        )
+        has_keychain_guidance = "Keychain" in guidelines or "UserDefaults" in guidelines
         assert has_keychain_guidance
 
 
@@ -363,15 +359,15 @@ class TestRubyGuidelines:
             is_dev=True,
             languages=["ruby"],
             security_keywords_found=["api"],
-            security_level="standard"
+            security_level="standard",
         )
         guidelines = get_security_guidelines(context)
 
         has_ruby_guidance = (
-            "Ruby" in guidelines or
-            "Rails" in guidelines or
-            "ActiveRecord" in guidelines or
-            "Strong Parameters" in guidelines
+            "Ruby" in guidelines
+            or "Rails" in guidelines
+            or "ActiveRecord" in guidelines
+            or "Strong Parameters" in guidelines
         )
         assert has_ruby_guidance
 
@@ -381,14 +377,11 @@ class TestRubyGuidelines:
             is_dev=True,
             languages=["ruby"],
             security_keywords_found=["auth", "login"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
-        has_csrf_guidance = (
-            "CSRF" in guidelines or
-            "has_secure_password" in guidelines
-        )
+        has_csrf_guidance = "CSRF" in guidelines or "has_secure_password" in guidelines
         assert has_csrf_guidance
 
 
@@ -401,15 +394,15 @@ class TestPHPGuidelines:
             is_dev=True,
             languages=["php"],
             security_keywords_found=["database"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
         has_php_guidance = (
-            "PHP" in guidelines or
-            "PDO" in guidelines or
-            "password_hash" in guidelines or
-            "htmlspecialchars" in guidelines
+            "PHP" in guidelines
+            or "PDO" in guidelines
+            or "password_hash" in guidelines
+            or "htmlspecialchars" in guidelines
         )
         assert has_php_guidance
 
@@ -419,14 +412,12 @@ class TestPHPGuidelines:
             is_dev=True,
             languages=["php"],
             security_keywords_found=["sql", "database", "query"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
         has_prepared_stmt = (
-            "PDO" in guidelines or
-            "preparees" in guidelines.lower() or
-            "bindParam" in guidelines
+            "PDO" in guidelines or "preparees" in guidelines.lower() or "bindParam" in guidelines
         )
         assert has_prepared_stmt
 
@@ -440,7 +431,7 @@ class TestMultiLanguageGuidelines:
             is_dev=True,
             languages=["python", "typescript", "javascript"],
             security_keywords_found=["django", "react", "api", "auth"],
-            security_level="critical"
+            security_level="critical",
         )
         guidelines = get_security_guidelines(context)
 
@@ -457,7 +448,7 @@ class TestMultiLanguageGuidelines:
             is_dev=True,
             languages=["cpp", "javascript"],
             security_keywords_found=["api", "file"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
@@ -477,7 +468,7 @@ class TestOWASPReminder:
             is_dev=True,
             languages=["python"],
             security_keywords_found=["api"],
-            security_level="standard"
+            security_level="standard",
         )
         guidelines = get_security_guidelines(context)
 
@@ -490,7 +481,7 @@ class TestOWASPReminder:
             is_dev=True,
             languages=["java"],
             security_keywords_found=["auth", "database"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
@@ -545,7 +536,7 @@ class TestSecurityLevelDetection:
             is_dev=True,
             languages=["python"],
             security_keywords_found=["auth", "database", "password", "jwt", "sql"],
-            security_level="critical"
+            security_level="critical",
         )
         guidelines = get_security_guidelines(context)
 
@@ -558,16 +549,16 @@ class TestSecurityLevelDetection:
             is_dev=True,
             languages=["python"],
             security_keywords_found=["file", "upload"],
-            security_level="elevated"
+            security_level="elevated",
         )
         guidelines = get_security_guidelines(context)
 
         # Should have file upload security guidance
         has_file_guidance = (
-            "Fichiers" in guidelines or
-            "Upload" in guidelines or
-            "MIME" in guidelines or
-            "path traversal" in guidelines.lower()
+            "Fichiers" in guidelines
+            or "Upload" in guidelines
+            or "MIME" in guidelines
+            or "path traversal" in guidelines.lower()
         )
         assert has_file_guidance
 

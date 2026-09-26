@@ -83,9 +83,7 @@ def project_root():
 def resolve_compose_file(args):
     """Fichier compose vise, par ordre de priorite : -f, env, defaut."""
     return (
-        getattr(args, "file", None)
-        or os.environ.get("PROMPTFORGE_COMPOSE")
-        or DEFAULT_COMPOSE_FILE
+        getattr(args, "file", None) or os.environ.get("PROMPTFORGE_COMPOSE") or DEFAULT_COMPOSE_FILE
     )
 
 
@@ -173,8 +171,14 @@ def ensure_model_containerized(compose_file, model):
     variante a l'autre (promptforge-ollama, -amd, -amd-max).
     """
     result = docker_compose(
-        compose_file, "exec", "-T", OLLAMA_SERVICE, "ollama", "list",
-        capture_output=True, text=True,
+        compose_file,
+        "exec",
+        "-T",
+        OLLAMA_SERVICE,
+        "ollama",
+        "list",
+        capture_output=True,
+        text=True,
     )
     if model in (result.stdout or ""):
         log_info(f"Modèle {model} déjà disponible")
@@ -270,10 +274,14 @@ def cmd_run(args):
         return 1
     result = docker_compose(
         compose_file,
-        "run", "--rm", "--no-deps",
-        "--entrypoint", "promptforge",
+        "run",
+        "--rm",
+        "--no-deps",
+        "--entrypoint",
+        "promptforge",
         WEB_SERVICE,
-        "--path", "/data",
+        "--path",
+        "/data",
         *args.cmd,
     )
     return result.returncode
@@ -345,7 +353,8 @@ def main():
         ),
     )
     parser.add_argument(
-        "-f", "--file",
+        "-f",
+        "--file",
         default=None,
         help=f"Fichier docker compose a utiliser (defaut: {DEFAULT_COMPOSE_FILE})",
     )

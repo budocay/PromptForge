@@ -2,7 +2,7 @@
 # PromptForge - Docker Compose AMD ROCm MAX
 # Pour RX 7900 XT/XTX avec modèle 32B
 # ============================================
-# Usage: docker compose -f docker-compose.amd-max.yml up -d
+# Usage: docker compose -f docker/compose/docker-compose.amd-max.yml up -d
 #
 # ⚠️  Ce fichier utilise qwen3:32b (~18GB VRAM)
 #     Plus lent mais BEAUCOUP plus intelligent
@@ -47,6 +47,8 @@ services:
       - OLLAMA_HOST=http://ollama:11434
       # Modèle 32B - Maximum qualité pour 18GB+ VRAM
       - OLLAMA_MODEL=qwen3:32b
+      # Delai d'une generation Ollama, en secondes (voir .env.example)
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-600}
       - PROMPTFORGE_DATA_PATH=/data
     volumes:
       # IMPORTANT: Persistance de la BDD SQLite et des projets

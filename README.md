@@ -102,8 +102,8 @@ Sur macOS et Windows, l'application Ollama lance `serve` toute seule.
 ### 2a. Avec Docker — le chemin le plus court
 
 ```bash
-git clone https://github.com/budocay/PrompForge.git
-cd PrompForge
+git clone https://github.com/budocay/PromptForge.git
+cd PromptForge
 docker compose up
 ```
 
@@ -117,8 +117,8 @@ Pour arrêter : `Ctrl-C`, ou `docker compose down` si tu as lancé avec `-d`.
 ### 2b. Sans Docker
 
 ```bash
-git clone https://github.com/budocay/PrompForge.git
-cd PrompForge
+git clone https://github.com/budocay/PromptForge.git
+cd PromptForge
 python3 -m venv .venv
 source .venv/bin/activate         # Windows : .venv\Scripts\activate
 pip install -e ".[all]"
@@ -210,22 +210,24 @@ promptforge --path ~/mes-prompts list
 
 Par défaut, le dossier courant.
 
-### Attention au modèle en CLI
+### Choisir le modèle en CLI
 
-**La CLI ignore la variable `OLLAMA_MODEL`** et utilise `llama3.1` par défaut.
-Si tu n'as pas ce modèle, `promptforge format` échoue sur un `HTTP Error 404`.
-Passe le modèle explicitement :
+La CLI prend le même modèle que l'interface web : `OLLAMA_MODEL` s'il est
+défini, sinon `qwen3:8b`. `--model` le remplace pour une commande :
 
 ```bash
-promptforge format "ton prompt" --model qwen3:8b
+promptforge format "ton prompt" --model qwen3:14b
 ```
+
+Si le modèle n'est pas installé, le message le dit et donne la commande
+`ollama pull` à lancer.
 
 Exemple complet :
 
 ```bash
 promptforge init mon-projet --config config.md
 promptforge use mon-projet
-promptforge format "trouve moi des mots cles pour mon site" --model qwen3:8b
+promptforge format "trouve moi des mots cles pour mon site"
 ```
 
 Le cœur de la CLI n'utilise que la bibliothèque standard. Gradio et tiktoken
@@ -240,23 +242,22 @@ Elles n'ont pas toutes la même portée. C'est mesuré, pas supposé :
 | Variable | Défaut | Lue par |
 |---|---|---|
 | `OLLAMA_HOST` | `http://localhost:11434` | interface web **et** CLI |
-| `OLLAMA_MODEL` | `qwen3:8b` | **interface web uniquement** |
+| `OLLAMA_MODEL` | `qwen3:8b` | interface web **et** CLI (`--model` le remplace) |
 | `OLLAMA_TIMEOUT` | `600` (secondes) | interface web **et** CLI |
-| `PROMPTFORGE_DATA_PATH` | dossier courant | **interface web uniquement** |
+| `PROMPTFORGE_DATA_PATH` | dossier courant | interface web **et** CLI (`--path` le remplace) |
 | `HOSTFS_PATH` | `../` | Docker : dossier monté en lecture seule pour le Scanner |
 
-En CLI, l'équivalent de `OLLAMA_MODEL` est `--model`, et l'équivalent de
-`PROMPTFORGE_DATA_PATH` est `--path`.
+En CLI, `--model` et `--path` priment sur ces variables pour une commande.
 
-En Docker, `compose.yaml` fixe déjà `OLLAMA_HOST`, `OLLAMA_MODEL` et
-`PROMPTFORGE_DATA_PATH`. Pour changer de modèle sans éditer le fichier :
+En Docker, `compose.yaml` fixe déjà `OLLAMA_HOST`, `OLLAMA_MODEL`,
+`OLLAMA_TIMEOUT` et `PROMPTFORGE_DATA_PATH`. Pour changer de modèle sans éditer le fichier :
 
 ```bash
 OLLAMA_MODEL=qwen3:14b docker compose up
 ```
 
-Le fichier `.env.example` documente les deux variables que `compose.yaml` lit
-depuis un `.env` : `OLLAMA_MODEL` et `HOSTFS_PATH`. Copie-le pour t'en servir :
+Le fichier `.env.example` documente les trois variables que `compose.yaml` lit
+depuis un `.env` : `OLLAMA_MODEL`, `OLLAMA_TIMEOUT` et `HOSTFS_PATH`. Copie-le pour t'en servir :
 
 ```bash
 cp .env.example .env
@@ -320,32 +321,31 @@ make help                                                           # toutes les
 ## Développement
 
 ```bash
-source .venv/bin/activate     # indispensable : le Makefile appelle pytest/ruff/black nus
+source .venv/bin/activate
 pip install -e ".[all]"
 
+make check                    # lint + format-check + tests
 make test                     # suite complète
+make test-fast                # sans les tests `integration` (réseau)
 make test-cov                 # avec couverture HTML
 pytest tests/test_core.py -v  # un fichier
 ```
 
-Sans venv activé, `make test`, `make lint` et `make format` échouent sur
-`No such file or directory`.
+Le Makefile appelle `python3 -m pytest`, `-m ruff`, `-m black` : il utilise le
+Python du venv actif. Sans venv, `make test PYTHON=.venv/bin/python`.
 
 Les tests d'intégration Ollama (`tests/test_ollama_integration.py`) appellent un
 vrai modèle. Ils sont ignorés si Ollama ne répond pas, et allongent nettement la
 suite s'il répond : mesuré ici, 8 min 37 avec Ollama disponible.
 
-Parmi eux, `TestPerformance::test_formatting_speed` compare un temps de réponse
-réel à un seuil fixe de 60 s. Il échoue sur une machine lente ou chargée sans
-que rien ne soit cassé. Si c'est ton seul échec, ce n'est pas ta modification.
+Parmi eux, `TestPerformance::test_formatting_speed` compare le temps de
+réponse moyen à un budget de 60 s, réglable par `PROMPTFORGE_PERF_BUDGET` sur
+une machine lente ou avec un gros modèle.
 
-`make lint` et `make format-check` signalent aujourd'hui une dette de style
-connue et non résorbée. Ils ne sont donc pas verts, et `make check`, qui les
-enchaîne, ne l'est pas non plus. Ne pas reformater tout le dépôt dans une PR de
-fonctionnalité.
-
-Ce dépôt n'a **aucune intégration continue** : les vérifications ne tournent
-qu'en local. Lance `make test` avant de proposer une modification.
+`make lint` et `make format-check` sont verts. La CI GitHub Actions
+(`.github/workflows/ci.yml`) les relance sur chaque PR, avec la suite de tests
+sous Python 3.10, 3.11 et 3.12 (sans les tests `integration`, et sans Ollama :
+ses tests sont ignorés d'eux-mêmes).
 
 Voir [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -372,18 +372,16 @@ ouvre l'application Ollama. Vérifie avec :
 curl http://localhost:11434/api/tags
 ```
 
-### `Erreur Ollama: HTTP Error 404: Not Found`
+### « Le modèle '…' n'est pas installé dans Ollama »
 
-Le modèle demandé n'est pas installé. Le message ne le dit pas : c'est Ollama
-qui répond 404 sur un modèle inconnu.
+Ollama a répondu 404 : le modèle demandé n'existe pas sur ta machine.
 
 ```bash
 ollama list              # ce que tu as vraiment
 ollama pull qwen3:8b     # installer
 ```
 
-En CLI, c'est le cas le plus fréquent : le défaut est `llama3.1`, que peu de
-gens ont. Passe `--model qwen3:8b`.
+Ou choisis un modèle déjà présent via `OLLAMA_MODEL` (ou `--model` en CLI).
 
 ### « Le modèle n'a pas répondu dans le délai »
 
@@ -436,7 +434,7 @@ Attendu avec le fichier compose par défaut, qui ne déclare que
 
 Le conteneur ne voit que le dossier monté sur `/hostfs`, en lecture seule. Par
 défaut c'est le **dossier parent du dépôt** : si tu as cloné dans
-`~/Dev/PrompForge`, le Scanner ne voit que ce qu'il y a dans `~/Dev`.
+`~/Dev/PromptForge`, le Scanner ne voit que ce qu'il y a dans `~/Dev`.
 
 Pour l'élargir, mets `HOSTFS_PATH` dans `.env` puis recrée le conteneur :
 
@@ -479,10 +477,8 @@ versions de paquets, jamais ton code ni tes prompts.
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — mettre en place l'environnement, ouvrir une PR
 - [docs/SOURCES_METHODOLOGY.md](docs/SOURCES_METHODOLOGY.md) — sources des benchmarks et des tarifs
-- [docs/DOCKER_GUIDE.md](docs/DOCKER_GUIDE.md) — guide Docker détaillé.
-  **Attention :** ce guide est en cours de mise à jour et une partie de ses
-  commandes visent une ancienne disposition des fichiers compose. En cas de
-  contradiction, ce README fait foi.
+- [docs/DOCKER_GUIDE.md](docs/DOCKER_GUIDE.md) — les sept fichiers compose,
+  Ollama natif ou conteneurisé, données et dépannage
 
 ---
 

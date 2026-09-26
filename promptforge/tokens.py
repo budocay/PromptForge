@@ -5,7 +5,6 @@ with fallback to heuristic estimation.
 """
 
 import re
-from typing import Optional
 from functools import lru_cache
 
 # Try to import tiktoken for accurate counting
@@ -14,6 +13,7 @@ _tiktoken_encoding = None
 
 try:
     import tiktoken
+
     _tiktoken_available = True
 except ImportError:
     pass
@@ -71,12 +71,12 @@ def estimate_tokens_heuristic(text: str) -> int:
     chars = len(text)
 
     # Count special elements that typically become separate tokens
-    numbers = len(re.findall(r'\d+', text))
+    numbers = len(re.findall(r"\d+", text))
     punctuation = len(re.findall(r'[.,!?;:()[\]{}"\']', text))
-    newlines = text.count('\n')
+    newlines = text.count("\n")
 
     # Code-specific tokens (if text appears to be code)
-    code_indicators = ['def ', 'function ', 'class ', 'import ', 'const ', 'let ', 'var ', '```']
+    code_indicators = ["def ", "function ", "class ", "import ", "const ", "let ", "var ", "```"]
     is_code = any(indicator in text for indicator in code_indicators)
 
     if is_code:
@@ -84,20 +84,20 @@ def estimate_tokens_heuristic(text: str) -> int:
         # Approximately 1 token per 3.5 characters for code
         base_estimate = chars / 3.5
         # Add extra for operators and special characters
-        operators = len(re.findall(r'[+\-*/=<>!&|^~%]', text))
+        operators = len(re.findall(r"[+\-*/=<>!&|^~%]", text))
         base_estimate += operators * 0.5
     else:
         # For natural language text
         # Use weighted average of word-based and char-based estimates
         word_based = words * 1.3  # ~1.3 tokens per word
-        char_based = chars / 4.0   # ~4 chars per token
-        base_estimate = (word_based * 0.6 + char_based * 0.4)
+        char_based = chars / 4.0  # ~4 chars per token
+        base_estimate = word_based * 0.6 + char_based * 0.4
 
     # Add tokens for special elements
     special_tokens = (
-        numbers * 0.5 +      # Numbers often split into multiple tokens
-        punctuation * 0.3 +  # Some punctuation is merged, some separate
-        newlines * 0.2       # Newlines sometimes count
+        numbers * 0.5  # Numbers often split into multiple tokens
+        + punctuation * 0.3  # Some punctuation is merged, some separate
+        + newlines * 0.2  # Newlines sometimes count
     )
 
     return max(1, int(base_estimate + special_tokens))
@@ -193,18 +193,14 @@ def count_tokens_detailed(text: str) -> dict:
         Dict with token count and breakdown
     """
     if not text:
-        return {
-            "total": 0,
-            "method": "empty",
-            "breakdown": {}
-        }
+        return {"total": 0, "method": "empty", "breakdown": {}}
 
     result = {
         "total": estimate_tokens(text),
         "method": "tiktoken" if _tiktoken_available else "heuristic",
         "characters": len(text),
         "words": len(text.split()),
-        "lines": text.count('\n') + 1,
+        "lines": text.count("\n") + 1,
     }
 
     # Add ratio information

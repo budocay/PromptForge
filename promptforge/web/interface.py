@@ -13,42 +13,59 @@ Interface principale:
 - ❓ Aide
 """
 
-import gradio as gr
 from pathlib import Path
-from datetime import datetime
-import json
-import os
+
+import gradio as gr
+
+from ..logging_config import get_logger
+from ..security import format_cve_alert
+from .analysis import compare_prompts
 
 # Imports internes
 from .assets import CSS_V4, LOGO_SVG_LARGE
 from .ollama_helpers import (
-    get_forge, set_base_path, check_ollama_status,
-    get_ollama_models, get_current_ollama_model, change_ollama_model
+    change_ollama_model,
+    check_ollama_status,
+    get_current_ollama_model,
+    get_forge,
+    get_ollama_models,
+    set_base_path,
 )
+from .onboarding import ONBOARDING_FLOWS
+from .profiles_ui import get_profile_choices, get_profile_info
 from .project_helpers import (
-    get_projects_list, get_current_project, get_project_config,
-    refresh_projects_dropdown, select_project, create_project_from_editor,
-    upload_file, delete_project, load_project_to_editor, get_history_display,
-    SANS_PROJET
+    SANS_PROJET,
+    create_project_from_editor,
+    delete_project,
+    get_current_project,
+    get_history_display,
+    get_project_config,
+    get_projects_list,
+    load_project_to_editor,
+    select_project,
+    upload_file,
 )
+from .recommendations import calculate_costs, generate_recommendation, get_comparison_table
 from .scanner_helpers import (
-    get_default_scan_path, scan_directory_for_ui, format_scan_summary,
-    scan_uploaded_zip, save_scanned_config, is_valid_project, get_folder_info,
-    browse_for_folder, generate_config_with_llm
+    browse_for_folder,
+    generate_config_with_llm,
+    get_folder_info,
+    scan_directory_for_ui,
+    scan_uploaded_zip,
 )
 from .template_helpers import get_template_choices, get_template_content
-from .profiles_ui import get_profile_choices, get_profile_info
-from .onboarding import ONBOARDING_FLOWS
 from .wizard import (
-    SLOT_TYPE_ORDER, WIZARD_SLOT_COUNT, SAVE_PENDING_MESSAGE, build_slot_field,
-    on_profession_selected, start_wizard, go_next, go_prev,
-    restart_wizard, save_wizard_project
+    SAVE_PENDING_MESSAGE,
+    SLOT_TYPE_ORDER,
+    WIZARD_SLOT_COUNT,
+    build_slot_field,
+    go_next,
+    go_prev,
+    on_profession_selected,
+    restart_wizard,
+    save_wizard_project,
+    start_wizard,
 )
-from .analysis import compare_prompts
-from .recommendations import generate_recommendation, get_comparison_table, calculate_costs
-
-from ..logging_config import get_logger
-from ..security import format_cve_alert, SecurityContext
 
 logger = get_logger(__name__)
 
@@ -68,7 +85,7 @@ Pose-moi ces questions UNE PAR UNE et attends ma réponse avant de passer à la 
 3. **Type de projet** - API REST, webapp, CLI, librairie, mobile ?
 4. **Stade** - POC, MVP, production, legacy ?
 
-## 🛠️ PARTIE 2 : Stack Technique  
+## 🛠️ PARTIE 2 : Stack Technique
 5. **Langages et versions** - Ex: Python 3.12, Node 20.x
 6. **Frameworks** - Backend, Frontend, ORM
 7. **Base de données** - Type et hébergement
@@ -96,13 +113,13 @@ def load_template_by_name(template_name: str) -> str:
     """Charge le contenu d'un template par son nom."""
     if not template_name:
         return "*Sélectionne un template pour voir son contenu*"
-    
+
     # Trouver la clé correspondant au nom
     for name, key in get_template_choices():
         if name == template_name:
             content = get_template_content(key)
             return content if content else f"*Template '{template_name}' non trouvé*"
-    
+
     return f"*Template '{template_name}' non trouvé*"
 
 
@@ -110,7 +127,10 @@ def load_template_by_name(template_name: str) -> str:
 # FONCTIONS HELPER
 # ═══════════════════════════════════════════════════════════════════════════
 
-def format_prompt_with_ollama(raw_prompt: str, project_name: str, profile: str, check_cves: bool = False):
+
+def format_prompt_with_ollama(
+    raw_prompt: str, project_name: str, profile: str, check_cves: bool = False
+):
     """Reformate un prompt via Ollama avec le contexte projet et analyse de sécurité."""
     forge = get_forge()
 
@@ -132,7 +152,7 @@ def format_prompt_with_ollama(raw_prompt: str, project_name: str, profile: str, 
             project_name=proj_name,
             profile_name=profile,
             check_security=True,
-            check_cves=check_cves
+            check_cves=check_cves,
         )
 
         if not success or not formatted:
@@ -146,7 +166,9 @@ def format_prompt_with_ollama(raw_prompt: str, project_name: str, profile: str, 
         # Build security info for stats
         security_info = ""
         if security_ctx and security_ctx.is_dev:
-            level_emoji = {"standard": "🟢", "elevated": "🟡", "critical": "🔴"}.get(security_ctx.security_level, "⚪")
+            level_emoji = {"standard": "🟢", "elevated": "🟡", "critical": "🔴"}.get(
+                security_ctx.security_level, "⚪"
+            )
             langs = ", ".join(security_ctx.languages[:3]) if security_ctx.languages else "N/A"
             security_info = f"""
     <div class="pf-stat-chip">
@@ -208,20 +230,21 @@ def format_prompt_with_ollama(raw_prompt: str, project_name: str, profile: str, 
 # INTERFACE PRINCIPALE
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def create_interface() -> gr.Blocks:
     """Crée l'interface Gradio v4 complète."""
 
     with gr.Blocks(title="PromptForge", fill_width=True) as interface:
-        
+
         # ═══════════════════════════════════════════════════════════════
         # CSS INJECTION
         # ═══════════════════════════════════════════════════════════════
-        gr.HTML(f'<style>{CSS_V4}</style>')
-        
+        gr.HTML(f"<style>{CSS_V4}</style>")
+
         # ═══════════════════════════════════════════════════════════════
         # HEADER
         # ═══════════════════════════════════════════════════════════════
-        gr.HTML(f'''
+        gr.HTML(f"""
         <div class="pf-header">
             <div class="pf-header-logo">
                 {LOGO_SVG_LARGE}
@@ -231,8 +254,8 @@ def create_interface() -> gr.Blocks:
                 Reformateur intelligent de prompts avec contexte projet
             </p>
         </div>
-        ''')
-        
+        """)
+
         # ═══════════════════════════════════════════════════════════════
         # BARRE OLLAMA
         # ═══════════════════════════════════════════════════════════════
@@ -247,157 +270,163 @@ def create_interface() -> gr.Blocks:
                         value=get_current_ollama_model(),
                         interactive=True,
                         allow_custom_value=True,
-                        scale=3
+                        scale=3,
                     )
                     refresh_ollama_btn = gr.Button("🔄", variant="secondary", scale=0, min_width=60)
 
         # ═══════════════════════════════════════════════════════════════
         # TABS PRINCIPAUX
         # ═══════════════════════════════════════════════════════════════
-        with gr.Tabs() as main_tabs:
-            
+        with gr.Tabs():
+
             # ═══════════════════════════════════════════════════════════
             # TAB 1: REFORMATER
             # ═══════════════════════════════════════════════════════════
             with gr.Tab("✨ Reformater", id="tab-reformat"):
                 gr.Markdown("## ✨ Reformater un prompt")
-                gr.Markdown("Entre ton prompt brut et récupère une version enrichie avec le contexte de ton projet.")
-                
+                gr.Markdown(
+                    "Entre ton prompt brut et récupère une version enrichie avec le contexte de ton projet."
+                )
+
                 with gr.Row():
                     # Colonne gauche: Configuration + Input
                     with gr.Column(scale=1):
                         gr.Markdown("### 📝 Configuration")
-                        
+
                         project_select = gr.Dropdown(
                             label="📁 Projet actif",
                             choices=get_projects_list(),
                             value=get_current_project() or None,
                             interactive=True,
                             allow_custom_value=True,
-                            info="Sélectionne ton projet pour ajouter son contexte"
+                            info="Sélectionne ton projet pour ajouter son contexte",
                         )
-                        
+
                         profile_select = gr.Dropdown(
                             label="🎯 Optimisé pour",
                             choices=get_profile_choices(),
                             value="universel",
                             interactive=True,
-                            info="Choisis le LLM cible pour un format optimal"
+                            info="Choisis le LLM cible pour un format optimal",
                         )
-                        
+
                         profile_info = gr.Markdown(get_profile_info("universel"))
 
                         check_cves_checkbox = gr.Checkbox(
                             label="🔒 Vérifier les CVE (dépendances vulnérables)",
                             value=False,
-                            info="Vérifie les vulnérabilités via OSV.dev (plus lent)"
+                            info="Vérifie les vulnérabilités via OSV.dev (plus lent)",
                         )
 
                         gr.Markdown("### ✏️ Ton prompt")
-                        
+
                         raw_prompt = gr.Textbox(
                             label="",
                             placeholder="Ex: crée une route pour gérer les utilisateurs avec authentification JWT...",
                             lines=8,
-                            max_lines=15
+                            max_lines=15,
                         )
-                        
-                        format_btn = gr.Button(
-                            "🚀 Reformater",
-                            variant="primary",
-                            size="lg"
-                        )
-                        
+
+                        format_btn = gr.Button("🚀 Reformater", variant="primary", size="lg")
+
                         format_status = gr.Markdown("")
-                    
+
                     # Colonne droite: Output
                     with gr.Column(scale=1):
                         gr.Markdown("### 📤 Prompt enrichi")
                         gr.Markdown("*Copie ce prompt et colle-le dans ton LLM préféré*")
-                        
+
                         formatted_output = gr.Textbox(
                             label="",
                             placeholder="Le prompt enrichi apparaîtra ici après reformatage...",
                             lines=15,
                             max_lines=25,
-                            interactive=True
+                            interactive=True,
                         )
-                        
+
                         stats_html = gr.HTML("")
-                
+
                 # Accordéons pour infos supplémentaires
                 with gr.Accordion("🎯 Recommandation de modèle", open=False):
-                    recommendation_output = gr.Markdown("*Lance un reformatage pour voir la recommandation...*")
-                
+                    recommendation_output = gr.Markdown(
+                        "*Lance un reformatage pour voir la recommandation...*"
+                    )
+
                 with gr.Accordion("📈 Analyse d'amélioration", open=False):
-                    analysis_output = gr.Markdown("*Lance un reformatage pour voir l'analyse comparative...*")
+                    analysis_output = gr.Markdown(
+                        "*Lance un reformatage pour voir l'analyse comparative...*"
+                    )
 
                 with gr.Accordion("🔒 Alertes de sécurité", open=False):
-                    security_alerts_output = gr.Markdown("*Les alertes CVE apparaîtront ici si des vulnérabilités sont détectées...*")
+                    security_alerts_output = gr.Markdown(
+                        "*Les alertes CVE apparaîtront ici si des vulnérabilités sont détectées...*"
+                    )
 
                 with gr.Accordion("📋 Configuration du projet", open=False):
-                    project_config_display = gr.Markdown("*Sélectionne un projet pour voir sa configuration*")
-            
+                    project_config_display = gr.Markdown(
+                        "*Sélectionne un projet pour voir sa configuration*"
+                    )
+
             # ═══════════════════════════════════════════════════════════
             # TAB 2: PROJETS
             # ═══════════════════════════════════════════════════════════
             with gr.Tab("📁 Projets", id="tab-projects"):
                 gr.Markdown("## 📁 Gestion des projets")
                 gr.Markdown("Crée et gère tes projets avec leurs configurations personnalisées.")
-                
+
                 with gr.Row():
                     # Colonne gauche: Création
                     with gr.Column(scale=1):
                         gr.Markdown("### ➕ Créer un projet")
-                        
+
                         new_project_name = gr.Textbox(
-                            label="1️⃣ Nom du projet",
-                            placeholder="mon-super-projet",
-                            max_lines=1
+                            label="1️⃣ Nom du projet", placeholder="mon-super-projet", max_lines=1
                         )
-                        
+
                         gr.Markdown("**2️⃣ Configuration** (choisir une méthode)")
-                        
+
                         with gr.Tabs():
                             with gr.Tab("📤 Uploader un .md"):
                                 config_file = gr.File(
                                     label="Glisse-dépose ton fichier de config",
                                     file_types=[".md", ".txt"],
-                                    type="filepath"
+                                    type="filepath",
                                 )
                                 upload_btn = gr.Button("📤 Charger le fichier", variant="primary")
-                            
+
                             with gr.Tab("✏️ Écrire manuellement"):
                                 config_editor = gr.Textbox(
                                     label="Configuration (Markdown)",
                                     placeholder="# Mon Projet\n\n## Stack\n- Python 3.12\n- FastAPI\n- PostgreSQL\n\n## Conventions\n...",
                                     lines=12,
-                                    max_lines=20
+                                    max_lines=20,
                                 )
                                 save_btn = gr.Button("💾 Sauvegarder", variant="primary")
-                        
+
                         project_status = gr.Markdown("")
-                        
+
                         gr.Markdown("---")
                         delete_btn = gr.Button("🗑️ Supprimer le projet sélectionné", variant="stop")
-                    
+
                     # Colonne droite: Liste + Aperçu
                     with gr.Column(scale=1):
                         gr.Markdown("### 📂 Projets existants")
-                        
+
                         projects_list_dropdown = gr.Dropdown(
                             label="Sélectionner un projet",
                             choices=get_projects_list(),
                             interactive=True,
-                            allow_custom_value=True
+                            allow_custom_value=True,
                         )
-                        
+
                         load_btn = gr.Button("📂 Charger dans l'éditeur", variant="secondary")
-                        
+
                         gr.Markdown("### 📄 Aperçu de la configuration")
-                        
-                        project_preview = gr.Markdown("*Sélectionne un projet pour voir sa configuration*")
-            
+
+                        project_preview = gr.Markdown(
+                            "*Sélectionne un projet pour voir sa configuration*"
+                        )
+
             # ═══════════════════════════════════════════════════════════
             # TAB 3: SCANNER
             # ═══════════════════════════════════════════════════════════
@@ -413,25 +442,25 @@ def create_interface() -> gr.Blocks:
                             scan_path = gr.Textbox(
                                 label="Chemin du projet",
                                 placeholder="Clique sur Parcourir...",
-                                scale=4
+                                scale=4,
                             )
                             browse_btn = gr.Button("📁 Parcourir", variant="primary", scale=1)
 
-                        folder_info = gr.Markdown("*Clique sur Parcourir pour sélectionner un dossier*")
+                        folder_info = gr.Markdown(
+                            "*Clique sur Parcourir pour sélectionner un dossier*"
+                        )
 
                         gr.Markdown("### ⚙️ 2. Configuration")
 
                         scan_project_name = gr.Textbox(
-                            label="Nom du projet",
-                            placeholder="mon-super-projet",
-                            max_lines=1
+                            label="Nom du projet", placeholder="mon-super-projet", max_lines=1
                         )
 
                         scan_description = gr.Textbox(
                             label="Description (optionnel)",
                             placeholder="Laisse vide = extrait du README",
                             lines=2,
-                            max_lines=3
+                            max_lines=3,
                         )
 
                         scan_depth = gr.Slider(
@@ -440,32 +469,32 @@ def create_interface() -> gr.Blocks:
                             maximum=10,
                             value=5,
                             step=1,
-                            info="5 = standard, 10 = scan complet"
+                            info="5 = standard, 10 = scan complet",
                         )
 
                         use_ai_scan = gr.Checkbox(
                             label="🤖 Analyse IA (Ollama)",
                             value=True,
-                            info="Utilise l'IA pour comprendre le projet et générer un contexte intelligent"
+                            info="Utilise l'IA pour comprendre le projet et générer un contexte intelligent",
                         )
 
                         scan_check_cves = gr.Checkbox(
                             label="🔒 Vérifier les CVE (vulnérabilités)",
                             value=True,
-                            info="Vérifie les dépendances via OSV.dev pour détecter les failles de sécurité"
+                            info="Vérifie les dépendances via OSV.dev pour détecter les failles de sécurité",
                         )
 
                         gr.Markdown("### 🚀 3. Scanner")
 
                         scan_and_create_btn = gr.Button(
-                            "⚡ Scanner + Créer projet",
-                            variant="primary",
-                            size="lg"
+                            "⚡ Scanner + Créer projet", variant="primary", size="lg"
                         )
 
                         with gr.Row():
                             scan_btn = gr.Button("🔍 Aperçu seul", variant="secondary", scale=1)
-                            save_scan_btn = gr.Button("💾 Sauver config", variant="secondary", scale=1)
+                            save_scan_btn = gr.Button(
+                                "💾 Sauver config", variant="secondary", scale=1
+                            )
 
                         scan_status = gr.Markdown("")
 
@@ -480,7 +509,7 @@ def create_interface() -> gr.Blocks:
                             lines=25,
                             max_lines=40,
                             interactive=True,
-                            placeholder="La configuration apparaîtra ici..."
+                            placeholder="La configuration apparaîtra ici...",
                         )
 
                 # === OPTION ZIP ===
@@ -488,16 +517,10 @@ def create_interface() -> gr.Blocks:
                     gr.Markdown("*Pour scanner un projet depuis une autre machine*")
                     with gr.Row():
                         zip_file_upload = gr.File(
-                            label="📦 projet.zip",
-                            file_types=[".zip"],
-                            type="filepath",
-                            scale=2
+                            label="📦 projet.zip", file_types=[".zip"], type="filepath", scale=2
                         )
                         zip_project_name = gr.Textbox(
-                            label="📝 Nom",
-                            placeholder="mon-projet",
-                            max_lines=1,
-                            scale=1
+                            label="📝 Nom", placeholder="mon-projet", max_lines=1, scale=1
                         )
                         scan_zip_btn = gr.Button("🔍 Scanner", variant="primary", scale=1)
                     zip_scan_status = gr.Markdown("")
@@ -512,38 +535,42 @@ def create_interface() -> gr.Blocks:
 - 🚀 **Assistant Guidé** : Réponds à quelques questions et on génère ta config !
 - 📄 **Templates Manuels** : Copie un template et personnalise-le toi-même
                 """)
-                
+
                 with gr.Tabs():
                     # Sous-tab: Assistant Guidé
                     with gr.Tab("🚀 Assistant Guidé"):
                         gr.Markdown("### 🚀 Crée ton profil en 5 minutes!")
-                        gr.Markdown("Réponds aux questions et PromptForge génère automatiquement ton fichier de contexte. **C'est la méthode recommandée!**")
-                        
+                        gr.Markdown(
+                            "Réponds aux questions et PromptForge génère automatiquement ton fichier de contexte. **C'est la méthode recommandée!**"
+                        )
+
                         # États pour le wizard
                         wizard_answers = gr.State({})
                         wizard_step = gr.State(0)
                         wizard_profession = gr.State("")
-                        
+
                         # Sélection du métier
                         with gr.Group() as wizard_start_group:
-                            profession_choices = [(flow["name"], key) for key, flow in ONBOARDING_FLOWS.items()]
-                            
+                            profession_choices = [
+                                (flow["name"], key) for key, flow in ONBOARDING_FLOWS.items()
+                            ]
+
                             wizard_profession_dropdown = gr.Dropdown(
                                 label="🎯 Choisis ton métier",
                                 choices=[name for name, _ in profession_choices],
                                 value=None,
                                 interactive=True,
-                                info="Sélectionne ton domaine pour personnaliser les questions"
+                                info="Sélectionne ton domaine pour personnaliser les questions",
                             )
-                            
+
                             wizard_welcome_msg = gr.Markdown("")
                             wizard_start_btn = gr.Button(
                                 "▶️ Démarrer l'assistant",
                                 variant="primary",
                                 visible=False,
-                                size="lg"
+                                size="lg",
                             )
-                        
+
                         # Questions
                         with gr.Group(visible=False) as wizard_questions_group:
                             wizard_progress = gr.Markdown("")
@@ -568,64 +595,74 @@ def create_interface() -> gr.Blocks:
                             with gr.Row():
                                 wizard_prev_btn = gr.Button("⬅️ Précédent", variant="secondary")
                                 wizard_next_btn = gr.Button("Suivant ➡️", variant="primary")
-                        
+
                         # Résultat
                         with gr.Group(visible=False) as wizard_result_group:
                             gr.Markdown("### ✅ Ton profil est prêt!")
-                            
+
                             wizard_result = gr.Textbox(
                                 label="Configuration générée",
                                 lines=18,
                                 max_lines=25,
-                                interactive=False
+                                interactive=False,
                             )
-                            
+
                             with gr.Row():
                                 wizard_project_name = gr.Textbox(
-                                    label="Nom du projet",
-                                    placeholder="ex: mon-projet-seo",
-                                    scale=2
+                                    label="Nom du projet", placeholder="ex: mon-projet-seo", scale=2
                                 )
-                                wizard_save_btn = gr.Button("💾 Sauvegarder le projet", variant="primary", scale=1)
-                            
+                                wizard_save_btn = gr.Button(
+                                    "💾 Sauvegarder le projet", variant="primary", scale=1
+                                )
+
                             wizard_save_status = gr.Markdown("")
-                            
+
                             with gr.Row():
-                                wizard_restart_btn = gr.Button("🔄 Recommencer", variant="secondary")
-                    
+                                wizard_restart_btn = gr.Button(
+                                    "🔄 Recommencer", variant="secondary"
+                                )
+
                     # Sous-tab: Templates Manuels
                     with gr.Tab("📄 Templates Manuels"):
                         gr.Markdown("### 📄 Templates prêts à l'emploi")
-                        gr.Markdown("Sélectionne un template, personnalise-le et sauvegarde-le comme projet.")
-                        
+                        gr.Markdown(
+                            "Sélectionne un template, personnalise-le et sauvegarde-le comme projet."
+                        )
+
                         with gr.Row():
                             template_dropdown = gr.Dropdown(
                                 label="📋 Sélectionner un template",
                                 choices=[name for name, _ in get_template_choices()],
                                 interactive=True,
-                                scale=2
+                                scale=2,
                             )
-                            template_load_btn = gr.Button("📂 Charger", variant="secondary", scale=1)
-                        
-                        template_preview = gr.Markdown("*Sélectionne un template pour voir son contenu*")
-                        
+                            template_load_btn = gr.Button(
+                                "📂 Charger", variant="secondary", scale=1
+                            )
+
+                        template_preview = gr.Markdown(
+                            "*Sélectionne un template pour voir son contenu*"
+                        )
+
                         gr.Markdown("---")
-                        gr.Markdown("**💡 Conseil:** Après avoir chargé un template, personnalise-le dans l'onglet **Projets** en cliquant sur 'Écrire manuellement'.")
-            
+                        gr.Markdown(
+                            "**💡 Conseil:** Après avoir chargé un template, personnalise-le dans l'onglet **Projets** en cliquant sur 'Écrire manuellement'."
+                        )
+
             # ═══════════════════════════════════════════════════════════
             # TAB 5: HISTORIQUE
             # ═══════════════════════════════════════════════════════════
             with gr.Tab("📜 Historique", id="tab-history"):
                 gr.Markdown("## 📜 Historique des reformatages")
                 gr.Markdown("Retrouve tous tes prompts reformatés précédemment.")
-                
+
                 with gr.Row():
                     history_filter = gr.Dropdown(
                         label="🔍 Filtrer par projet",
                         choices=["Tous"] + get_projects_list(),
                         value="Tous",
                         interactive=True,
-                        scale=2
+                        scale=2,
                     )
                     history_limit = gr.Slider(
                         label="📊 Nombre de résultats",
@@ -633,12 +670,14 @@ def create_interface() -> gr.Blocks:
                         maximum=50,
                         value=10,
                         step=5,
-                        scale=2
+                        scale=2,
                     )
-                    refresh_history_btn = gr.Button("🔄", variant="secondary", scale=0, min_width=60)
-                
+                    refresh_history_btn = gr.Button(
+                        "🔄", variant="secondary", scale=0, min_width=60
+                    )
+
                 history_display = gr.Markdown(get_history_display("Tous", 10))
-            
+
             # ═══════════════════════════════════════════════════════════
             # TAB 6: GÉNÉRER CONFIG
             # ═══════════════════════════════════════════════════════════
@@ -652,19 +691,19 @@ def create_interface() -> gr.Blocks:
 4. 📄 Copie la configuration Markdown générée
 5. ✅ Colle-la dans l'onglet **Projets** pour créer ton projet
                 """)
-                
+
                 gr.Markdown("---")
-                
+
                 config_prompt_display = gr.Textbox(
                     label="📋 Prompt à copier",
                     value=CONFIG_GENERATOR_PROMPT,
                     lines=30,
                     max_lines=40,
-                    interactive=False
+                    interactive=False,
                 )
-                
+
                 copy_prompt_btn = gr.Button("📋 Copier le prompt", variant="primary", size="lg")
-                
+
                 gr.Markdown("""
 ---
 ### 💡 Astuce
@@ -674,42 +713,42 @@ Plus tu donnes de détails à l'IA, meilleure sera ta configuration! N'hésite p
 - Les règles métier importantes
 - Les erreurs à éviter
                 """)
-            
+
             # ═══════════════════════════════════════════════════════════
             # TAB 7: COMPARAISON
             # ═══════════════════════════════════════════════════════════
             with gr.Tab("💰 Comparaison", id="tab-comparison"):
                 gr.Markdown("## 💰 Comparaison des modèles LLM")
                 gr.Markdown("Tous les prix sont en **$ par million de tokens** (décembre 2025).")
-                
-                comparison_table_display = gr.Markdown(get_comparison_table())
-                
+
+                gr.Markdown(get_comparison_table())
+
                 gr.Markdown("---")
                 gr.Markdown("### 💵 Calculateur de coût")
-                
+
                 with gr.Row():
                     input_tokens = gr.Number(
                         label="📥 Tokens en entrée",
                         value=1000,
                         minimum=100,
-                        info="Nombre de tokens de ton prompt"
+                        info="Nombre de tokens de ton prompt",
                     )
                     output_tokens = gr.Number(
                         label="📤 Tokens en sortie",
                         value=500,
                         minimum=100,
-                        info="Nombre de tokens générés"
+                        info="Nombre de tokens générés",
                     )
                     calc_cost_btn = gr.Button("💵 Calculer le coût", variant="primary")
-                
+
                 cost_result = gr.Markdown("")
-                
+
                 gr.Markdown("""
 ---
 La recommandation propre à un prompt est calculée dans l'onglet
 **✨ Reformater**, à partir du prompt reformaté et des tarifs officiels.
                 """)
-            
+
             # ═══════════════════════════════════════════════════════════
             # TAB 8: AIDE
             # ═══════════════════════════════════════════════════════════
@@ -806,54 +845,61 @@ ollama pull qwen3:8b
 - 🐛 Bugs: Ouvre une issue sur GitHub
 - 💡 Suggestions: Bienvenues via les issues!
                 """)
-        
+
         # ═══════════════════════════════════════════════════════════════
         # EVENT HANDLERS
         # ═══════════════════════════════════════════════════════════════
-        
+
         # --- Ollama ---
         refresh_ollama_btn.click(
             fn=lambda: (check_ollama_status(), gr.update(choices=get_ollama_models())),
-            outputs=[ollama_status, ollama_model_select]
+            outputs=[ollama_status, ollama_model_select],
         )
-        
+
         ollama_model_select.change(
-            fn=change_ollama_model,
-            inputs=[ollama_model_select],
-            outputs=[ollama_status]
+            fn=change_ollama_model, inputs=[ollama_model_select], outputs=[ollama_status]
+        )
+
+        # --- Generer config ---
+        # Copie cote navigateur, sans aller-retour serveur (ferme D-063).
+        copy_prompt_btn.click(
+            fn=None,
+            inputs=[config_prompt_display],
+            js="(text) => { navigator.clipboard.writeText(text); }",
         )
 
         # --- Reformater ---
         format_btn.click(
             fn=format_prompt_with_ollama,
             inputs=[raw_prompt, project_select, profile_select, check_cves_checkbox],
-            outputs=[formatted_output, format_status, stats_html, analysis_output, recommendation_output, security_alerts_output]
+            outputs=[
+                formatted_output,
+                format_status,
+                stats_html,
+                analysis_output,
+                recommendation_output,
+                security_alerts_output,
+            ],
         )
-        
-        profile_select.change(
-            fn=get_profile_info,
-            inputs=[profile_select],
-            outputs=[profile_info]
-        )
-        
+
+        profile_select.change(fn=get_profile_info, inputs=[profile_select], outputs=[profile_info])
+
         project_select.change(
             fn=select_project,
             inputs=[project_select],
-            outputs=[project_config_display, format_status]
+            outputs=[project_config_display, format_status],
         )
-        
+
         def show_project_config(name):
             if not name or name == SANS_PROJET:
                 return "*Aucun projet sélectionné*"
             config = get_project_config(name)
             return config if config else "*Configuration non trouvée*"
-        
+
         project_select.change(
-            fn=show_project_config,
-            inputs=[project_select],
-            outputs=[project_config_display]
+            fn=show_project_config, inputs=[project_select], outputs=[project_config_display]
         )
-        
+
         # --- Projets ---
         # Wrappers pour extraire le statut des fonctions qui retournent des tuples
         def save_project_wrapper(name, config):
@@ -873,38 +919,40 @@ ollama pull qwen3:8b
             status = result[0] if isinstance(result, tuple) else result
             # Retourne aussi les mises à jour des dropdowns
             projects = get_projects_list()
-            return status, gr.update(choices=projects, value=None), gr.update(choices=projects, value=None)
+            return (
+                status,
+                gr.update(choices=projects, value=None),
+                gr.update(choices=projects, value=None),
+            )
 
         save_btn.click(
             fn=save_project_wrapper,
             inputs=[new_project_name, config_editor],
-            outputs=[project_status, projects_list_dropdown, project_select]
+            outputs=[project_status, projects_list_dropdown, project_select],
         )
 
         upload_btn.click(
             fn=upload_file_wrapper,
             inputs=[config_file, new_project_name],
-            outputs=[project_status, projects_list_dropdown, project_select]
+            outputs=[project_status, projects_list_dropdown, project_select],
         )
 
         load_btn.click(
             fn=load_project_to_editor,
             inputs=[projects_list_dropdown],
-            outputs=[new_project_name, config_editor]
+            outputs=[new_project_name, config_editor],
         )
 
         projects_list_dropdown.change(
-            fn=show_project_config,
-            inputs=[projects_list_dropdown],
-            outputs=[project_preview]
+            fn=show_project_config, inputs=[projects_list_dropdown], outputs=[project_preview]
         )
 
         delete_btn.click(
             fn=delete_project_wrapper,
             inputs=[projects_list_dropdown],
-            outputs=[project_status, projects_list_dropdown, project_select]
+            outputs=[project_status, projects_list_dropdown, project_select],
         )
-        
+
         # --- Scanner: Browse button ---
         def on_browse_click():
             """Ouvre le dialogue système pour sélectionner un dossier."""
@@ -920,10 +968,7 @@ ollama pull qwen3:8b
 
             return folder_path, info, suggested_name
 
-        browse_btn.click(
-            fn=on_browse_click,
-            outputs=[scan_path, folder_info, scan_project_name]
-        )
+        browse_btn.click(fn=on_browse_click, outputs=[scan_path, folder_info, scan_project_name])
 
         # Mise à jour des infos quand le chemin change manuellement
         def on_path_change(path_str):
@@ -934,9 +979,7 @@ ollama pull qwen3:8b
             return info, suggested_name
 
         scan_path.change(
-            fn=on_path_change,
-            inputs=[scan_path],
-            outputs=[folder_info, scan_project_name]
+            fn=on_path_change, inputs=[scan_path], outputs=[folder_info, scan_project_name]
         )
 
         # Scan simple (aperçu)
@@ -948,29 +991,48 @@ ollama pull qwen3:8b
                 return "❌ Entre un nom de projet", "", ""
 
             if use_ai:
-                return generate_config_with_llm(path, name, description, depth, check_cves=check_cves)
+                return generate_config_with_llm(
+                    path, name, description, depth, check_cves=check_cves
+                )
             else:
                 return scan_directory_for_ui(path, name, description, depth, check_cves=check_cves)
 
         scan_btn.click(
             fn=do_scan,
-            inputs=[scan_path, scan_project_name, scan_description, scan_depth, use_ai_scan, scan_check_cves],
-            outputs=[scan_status, scan_summary, scan_config_output]
+            inputs=[
+                scan_path,
+                scan_project_name,
+                scan_description,
+                scan_depth,
+                use_ai_scan,
+                scan_check_cves,
+            ],
+            outputs=[scan_status, scan_summary, scan_config_output],
         )
 
         # Scan + création projet
         def scan_and_create_project(path, name, description, depth, use_ai, check_cves):
             """Scan + création de projet en une seule action."""
             if not path:
-                return "", "", "❌ Sélectionne un dossier avec le bouton Parcourir", gr.update(), gr.update()
+                return (
+                    "",
+                    "",
+                    "❌ Sélectionne un dossier avec le bouton Parcourir",
+                    gr.update(),
+                    gr.update(),
+                )
             if not name:
                 return "", "", "❌ Entre un nom de projet", gr.update(), gr.update()
 
             # 1. Scanner (avec ou sans IA)
             if use_ai:
-                status, summary, config = generate_config_with_llm(path, name, description, depth, check_cves=check_cves)
+                status, summary, config = generate_config_with_llm(
+                    path, name, description, depth, check_cves=check_cves
+                )
             else:
-                status, summary, config = scan_directory_for_ui(path, name, description, depth, check_cves=check_cves)
+                status, summary, config = scan_directory_for_ui(
+                    path, name, description, depth, check_cves=check_cves
+                )
 
             if "❌" in status:
                 return config, summary, status, gr.update(), gr.update()
@@ -982,20 +1044,37 @@ ollama pull qwen3:8b
             if "✅" in create_status:
                 forge = get_forge()
                 forge.db.set_active_project(name)
-                final_status = f"✅ Projet **{name}** scanné et créé ! Va dans 'Reformater' pour l'utiliser."
+                final_status = (
+                    f"✅ Projet **{name}** scanné et créé ! Va dans 'Reformater' pour l'utiliser."
+                )
                 projects = get_projects_list()
                 return (
-                    config, summary, final_status,
+                    config,
+                    summary,
+                    final_status,
                     gr.update(choices=projects, value=name),
-                    gr.update(choices=projects)
+                    gr.update(choices=projects),
                 )
 
             return config, summary, create_status, gr.update(), gr.update()
 
         scan_and_create_btn.click(
             fn=scan_and_create_project,
-            inputs=[scan_path, scan_project_name, scan_description, scan_depth, use_ai_scan, scan_check_cves],
-            outputs=[scan_config_output, scan_summary, scan_status, project_select, projects_list_dropdown]
+            inputs=[
+                scan_path,
+                scan_project_name,
+                scan_description,
+                scan_depth,
+                use_ai_scan,
+                scan_check_cves,
+            ],
+            outputs=[
+                scan_config_output,
+                scan_summary,
+                scan_status,
+                project_select,
+                projects_list_dropdown,
+            ],
         )
 
         def save_scanned_project(name, config):
@@ -1007,11 +1086,8 @@ ollama pull qwen3:8b
         save_scan_btn.click(
             fn=save_scanned_project,
             inputs=[scan_project_name, scan_config_output],
-            outputs=[scan_status]
-        ).then(
-            fn=lambda: gr.update(choices=get_projects_list()),
-            outputs=[project_select]
-        )
+            outputs=[scan_status],
+        ).then(fn=lambda: gr.update(choices=get_projects_list()), outputs=[project_select])
 
         # --- Scanner ZIP ---
         def scan_zip_and_create_project(zip_file, name, description, depth):
@@ -1042,65 +1118,57 @@ ollama pull qwen3:8b
         scan_zip_btn.click(
             fn=scan_zip_and_create_project,
             inputs=[zip_file_upload, zip_project_name, scan_description, scan_depth],
-            outputs=[zip_scan_status, scan_summary, scan_config_output]
-        ).then(
-            fn=lambda: gr.update(choices=get_projects_list()),
-            outputs=[project_select]
-        ).then(
-            fn=lambda: gr.update(choices=get_projects_list()),
-            outputs=[projects_list_dropdown]
+            outputs=[zip_scan_status, scan_summary, scan_config_output],
+        ).then(fn=lambda: gr.update(choices=get_projects_list()), outputs=[project_select]).then(
+            fn=lambda: gr.update(choices=get_projects_list()), outputs=[projects_list_dropdown]
         )
 
         # --- Templates ---
         template_dropdown.change(
-            fn=load_template_by_name,
-            inputs=[template_dropdown],
-            outputs=[template_preview]
+            fn=load_template_by_name, inputs=[template_dropdown], outputs=[template_preview]
         )
-        
+
         template_load_btn.click(
-            fn=load_template_by_name,
-            inputs=[template_dropdown],
-            outputs=[template_preview]
+            fn=load_template_by_name, inputs=[template_dropdown], outputs=[template_preview]
         )
-        
+
         # --- Historique ---
         def update_history(project_filter, limit):
             return get_history_display(project_filter, int(limit))
-        
+
         history_filter.change(
-            fn=update_history,
-            inputs=[history_filter, history_limit],
-            outputs=[history_display]
+            fn=update_history, inputs=[history_filter, history_limit], outputs=[history_display]
         )
-        
+
         history_limit.change(
-            fn=update_history,
-            inputs=[history_filter, history_limit],
-            outputs=[history_display]
+            fn=update_history, inputs=[history_filter, history_limit], outputs=[history_display]
         )
-        
+
         refresh_history_btn.click(
-            fn=update_history,
-            inputs=[history_filter, history_limit],
-            outputs=[history_display]
+            fn=update_history, inputs=[history_filter, history_limit], outputs=[history_display]
         )
-        
+
         # --- Comparaison ---
         calc_cost_btn.click(
-            fn=calculate_costs,
-            inputs=[input_tokens, output_tokens],
-            outputs=[cost_result]
+            fn=calculate_costs, inputs=[input_tokens, output_tokens], outputs=[cost_result]
         )
-        
+
         # --- Wizard « Assistant Guidé » (DEC-012) ---
         # Toute la logique vit dans web/wizard.py ; ici on ne fait que
         # brancher. L'ordre des `outputs` suit WIZARD_NAV_OUTPUT_NAMES.
         wizard_nav_outputs = [
-            wizard_profession, wizard_step, wizard_answers,
-            wizard_start_group, wizard_questions_group, wizard_result_group,
-            wizard_progress, wizard_step_title, wizard_error,
-            wizard_prev_btn, wizard_next_btn, wizard_result,
+            wizard_profession,
+            wizard_step,
+            wizard_answers,
+            wizard_start_group,
+            wizard_questions_group,
+            wizard_result_group,
+            wizard_progress,
+            wizard_step_title,
+            wizard_error,
+            wizard_prev_btn,
+            wizard_next_btn,
+            wizard_result,
         ] + wizard_fields
 
         wizard_nav_inputs = [wizard_profession, wizard_step, wizard_answers] + wizard_fields
@@ -1108,67 +1176,57 @@ ollama pull qwen3:8b
         wizard_profession_dropdown.change(
             fn=on_profession_selected,
             inputs=[wizard_profession_dropdown],
-            outputs=[wizard_welcome_msg, wizard_start_btn]
+            outputs=[wizard_welcome_msg, wizard_start_btn],
         )
 
         wizard_start_btn.click(
-            fn=start_wizard,
-            inputs=[wizard_profession_dropdown],
-            outputs=wizard_nav_outputs
+            fn=start_wizard, inputs=[wizard_profession_dropdown], outputs=wizard_nav_outputs
         )
 
-        wizard_next_btn.click(
-            fn=go_next,
-            inputs=wizard_nav_inputs,
-            outputs=wizard_nav_outputs
-        )
+        wizard_next_btn.click(fn=go_next, inputs=wizard_nav_inputs, outputs=wizard_nav_outputs)
 
-        wizard_prev_btn.click(
-            fn=go_prev,
-            inputs=wizard_nav_inputs,
-            outputs=wizard_nav_outputs
-        )
+        wizard_prev_btn.click(fn=go_prev, inputs=wizard_nav_inputs, outputs=wizard_nav_outputs)
 
         # Etat de chargement explicite : l'ecriture disque et l'enregistrement
         # en base sont les seules operations non instantanees du parcours.
-        wizard_save_btn.click(
-            fn=lambda: SAVE_PENDING_MESSAGE,
-            outputs=[wizard_save_status]
-        ).then(
+        wizard_save_btn.click(fn=lambda: SAVE_PENDING_MESSAGE, outputs=[wizard_save_status]).then(
             fn=save_wizard_project,
             inputs=[wizard_project_name, wizard_result],
-            outputs=[wizard_save_status, project_select, projects_list_dropdown]
+            outputs=[wizard_save_status, project_select, projects_list_dropdown],
         )
 
         wizard_restart_btn.click(
             fn=restart_wizard,
             outputs=[
-                wizard_profession, wizard_step, wizard_answers,
-                wizard_start_group, wizard_questions_group, wizard_result_group,
-                wizard_profession_dropdown, wizard_welcome_msg, wizard_start_btn,
-                wizard_result, wizard_project_name, wizard_save_status,
-            ]
+                wizard_profession,
+                wizard_step,
+                wizard_answers,
+                wizard_start_group,
+                wizard_questions_group,
+                wizard_result_group,
+                wizard_profession_dropdown,
+                wizard_welcome_msg,
+                wizard_start_btn,
+                wizard_result,
+                wizard_project_name,
+                wizard_save_status,
+            ],
         )
 
         logger.info("Interface v4 created successfully")
-    
+
     return interface
 
 
-def launch_web(
-    host: str = "0.0.0.0",
-    port: int = 7860,
-    share: bool = False,
-    base_path: str = None
-):
+def launch_web(host: str = "0.0.0.0", port: int = 7860, share: bool = False, base_path: str = None):
     """Lance l'interface web."""
     if base_path:
         set_base_path(base_path)
-    
+
     logger.info(f"Launching interface v4 on {host}:{port}")
-    
+
     interface = create_interface()
-    
+
     # Favicon
     favicon_path = None
     possible_paths = [
@@ -1179,13 +1237,9 @@ def launch_web(
         if p.exists():
             favicon_path = str(p)
             break
-    
+
     interface.launch(
-        server_name=host,
-        server_port=port,
-        share=share,
-        favicon_path=favicon_path,
-        show_error=True
+        server_name=host, server_port=port, share=share, favicon_path=favicon_path, show_error=True
     )
 
 

@@ -51,18 +51,15 @@ PROFILE_DESCRIPTIONS = {
     "claude_opus_5": "🟣 Claude Opus 5 — Génération courante de la gamme Opus [XML]",
     "claude_sonnet_5": "🟣 Claude Sonnet 5 — Génération courante de la gamme Sonnet [XML]",
     "claude_haiku_4.5": "🟣 Claude Haiku 4.5 — Aucun successeur publié à ce jour [XML]",
-
     # GPT (OpenAI) - Markdown, c'est ce que produisent SYSTEM_PROMPT_GPT_*
     "gpt_5.1": "🟢 GPT-5.1 — Aucun retrait annoncé [Markdown]",
     "gpt_5.6_terra": "🟢 GPT-5.6 Terra — Successeur désigné de GPT-5 Mini [Markdown]",
     "gpt_5_pro": "🟢 GPT-5 Pro — Retrait annoncé au 11 déc. 2026 [Markdown]",
-
     # Gemini (Google) - XML par convention de produit ; Google documente XML
     # et Markdown comme equivalents, la seule exigence etant la coherence
     # (DEC-007 volet 2)
     "gemini_3.1_pro": "🔵 Gemini 3.1 Pro — Preview, fenêtre de contexte non confirmée [XML]",
     "gemini_3.6_flash": "🔵 Gemini 3.6 Flash — Tarif d'introduction jusqu'à fin 2026 [XML]",
-
     # Universel - ne cible aucun modele, n'impose donc aucune syntaxe (DEC-008)
     "universel": "⚪ Universel — Aucun modèle ciblé, compatible tous [XML ou Markdown]",
 }

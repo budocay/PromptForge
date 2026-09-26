@@ -41,7 +41,7 @@ gr = pytest.importorskip("gradio", reason="Gradio est un extra optionnel ([web])
 # ═══════════════════════════════════════════════════════════════════════════
 
 EXPECTED_BLOCK_COUNT = 211
-EXPECTED_HANDLER_COUNT = 33
+EXPECTED_HANDLER_COUNT = 34
 EXPECTED_INTERACTIVE_COUNT = 81
 
 # Plafond de temps de construction. La mesure de reference est 0,12 s ; le
@@ -63,22 +63,16 @@ BUILD_TIME_BUDGET_SECONDS = 2.0
 # Cette liste EST la dette D-063, ecrite en clair. Elle doit **decroitre**.
 # Le bloc 2 (DEC-012, cablage de l'assistant guide) en retire dix-sept ; le
 # couple « Prompt a copier » / « Copier le prompt » de l'onglet « Generer
-# config » ferme les deux derniers.
+# config » ferme les deux derniers : la liste est desormais vide et doit le
+# rester.
 #
 # Le test echoue dans les DEUX sens : un orphelin nouveau est une regression,
 # une exemption devenue caduque est un progres a acter ici meme.
 
-KNOWN_UNWIRED_D063 = {
-    # --- Onglet « Generer config » : le champ de sortie et son bouton de copie
-    # ne sont relies a aucun gestionnaire.
-    "🎯 Générer config | Textbox | 📋 Prompt à copier",
-    "🎯 Générer config | Button | '📋 Copier le prompt'",
-}
+KNOWN_UNWIRED_D063: set[str] = set()
 
 # Repartition declaree, pour que le compte reste lisible dans le rapport.
-EXPECTED_EXEMPTIONS_BY_TAB = {
-    "🎯 Générer config": 2,
-}
+EXPECTED_EXEMPTIONS_BY_TAB: dict[str, int] = {}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -327,14 +321,14 @@ class TestNoUnwiredComponent:
 
         Le bloc 2 (DEC-012) a ramene la dette de dix-neuf exemptions a deux :
         les dix-sept composants de l'assistant guide sont desormais cables.
-        Restent le champ « Prompt a copier » et son bouton, cible du bloc
-        suivant.
+        Le bouton « Copier le prompt », relie a une copie cote navigateur,
+        ferme les deux dernieres : la dette D-063 est soldee.
         """
         from collections import Counter
 
         by_tab = Counter(name.split(" | ")[0] for name in KNOWN_UNWIRED_D063)
         assert dict(by_tab) == EXPECTED_EXEMPTIONS_BY_TAB
-        assert len(KNOWN_UNWIRED_D063) == 2
+        assert len(KNOWN_UNWIRED_D063) == 0
         assert len(_interactive_components(built.app)) == EXPECTED_INTERACTIVE_COUNT
 
 

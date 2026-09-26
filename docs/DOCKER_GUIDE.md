@@ -1,574 +1,152 @@
-# 🐳 PromptForge - Guide de Déploiement Docker
+# Guide Docker
 
-Guide complet pour lancer PromptForge avec Docker, incluant l'interface web Gradio et Ollama.
+Ce guide détaille les sept fichiers compose du dépôt. Pour démarrer vite, le
+[README](../README.md#2a-avec-docker--le-chemin-le-plus-court) suffit :
+`docker compose up` à la racine.
 
----
-
-## 📋 Table des matières
-
-1. [Prérequis](#-prérequis)
-2. [Installation Rapide (5 minutes)](#-installation-rapide)
-3. [Installation Détaillée](#-installation-détaillée)
-4. [Configuration](#-configuration)
-5. [Utilisation](#-utilisation)
-6. [Changer de Modèle Ollama](#-changer-de-modèle-ollama)
-7. [Dépannage](#-dépannage)
-8. [Commandes Utiles](#-commandes-utiles)
+Toutes les commandes se lancent **depuis la racine du dépôt**.
 
 ---
 
-## 🔧 Prérequis
+## Deux architectures
 
-### Minimum requis
+| | Ollama | Fichiers | Pour qui |
+|---|---|---|---|
+| **Ollama natif** (défaut) | sur l'hôte, hors conteneur | `compose.yaml`, `win-nvidia`, `win-amd` | macOS, Windows, et tout Linux où Ollama est déjà installé |
+| **Ollama conteneurisé** | dans un conteneur `ollama` | `docker-compose.yml` (NVIDIA), `cpu`, `amd`, `amd-max` | Linux avec un GPU exposé à Docker, ou sans GPU |
 
-| Composant | Version minimum | Vérification |
-|-----------|-----------------|--------------|
-| Docker | 20.10+ | `docker --version` |
-| Docker Compose | 2.0+ | `docker compose version` |
-| RAM | 8 GB | - |
-| Disque | 10 GB libre | Pour les modèles Ollama |
+Pourquoi le natif par défaut : Ollama est le seul composant qui a besoin du GPU.
+Docker Desktop ne donne pas accès à Metal sur macOS, et l'accès GPU sous
+Windows dépend du pilote. Un Ollama conteneurisé y perdrait l'accélération.
 
-### Optionnel (recommandé)
+---
 
-| Composant | Pour quoi faire |
-|-----------|-----------------|
-| GPU NVIDIA | Accélérer Ollama (10x plus rapide) |
-| NVIDIA Driver | 525+ |
-| NVIDIA Container Toolkit | Support GPU dans Docker |
-
-### Vérifier Docker
+## Ollama natif (`compose.yaml`)
 
 ```bash
-# Vérifier Docker
-docker --version
-# Docker version 24.0.0 ou supérieur
-
-# Vérifier Docker Compose
-docker compose version
-# Docker Compose version v2.20.0 ou supérieur
+ollama serve             # sur l'hôte (l'app macOS/Windows le fait seule)
+ollama pull qwen3:8b
+docker compose up        # interface sur http://localhost:7860
 ```
 
-### Installer NVIDIA Container Toolkit (optionnel, pour GPU)
+Le conteneur `promptforge-web` rejoint l'Ollama de l'hôte via
+`host.docker.internal:11434`. Il n'y a **pas** de service `ollama` dans ce
+fichier : `docker compose exec ollama …` y échoue avec `no such service`.
+
+Les variantes Windows font la même chose, avec un modèle par défaut différent :
 
 ```bash
-# Ubuntu/Debian
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
-  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-sudo apt-get update
-sudo apt-get install -y nvidia-container-toolkit
-sudo systemctl restart docker
+docker compose -f docker/compose/docker-compose.win-nvidia.yml up -d   # qwen3:8b
+docker compose -f docker/compose/docker-compose.win-amd.yml up -d      # qwen3:14b
+```
 
-# Vérifier
+---
+
+## Ollama conteneurisé (Linux)
+
+| Fichier | GPU | Modèle | Téléchargement du modèle |
+|---|---|---|---|
+| `docker/compose/docker-compose.yml` | NVIDIA | `qwen3:8b` | automatique (service `ollama-pull`) |
+| `docker/compose/docker-compose.cpu.yml` | aucun | `phi4-mini` | automatique (service `ollama-pull`) |
+| `docker/compose/docker-compose.amd.yml` | AMD ROCm | `qwen3:14b` | manuel, voir plus bas |
+| `docker/compose/docker-compose.amd-max.yml` | AMD ROCm | `qwen3:32b` | manuel, voir plus bas |
+
+```bash
+# NVIDIA : nécessite le NVIDIA Container Toolkit
+docker compose -f docker/compose/docker-compose.yml up -d
+docker compose -f docker/compose/docker-compose.yml logs -f ollama-pull
+
+# Sans GPU
+docker compose -f docker/compose/docker-compose.cpu.yml up -d
+```
+
+Pour AMD, le modèle n'est pas téléchargé tout seul :
+
+```bash
+docker compose -f docker/compose/docker-compose.amd.yml up -d
+docker compose -f docker/compose/docker-compose.amd.yml exec ollama ollama pull qwen3:14b
+```
+
+Le fichier AMD fixe `HSA_OVERRIDE_GFX_VERSION=11.0.0`, valeur des RX 7900
+(gfx1100). Pour une autre carte, ajuste-la dans le fichier.
+
+Vérifier que le GPU NVIDIA est vu par Docker :
+
+```bash
 docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
 ```
 
 ---
 
-## 🚀 Installation Rapide
+## Configuration
 
-### Avec GPU NVIDIA
+`compose.yaml` et toutes les variantes lisent ces variables depuis
+l'environnement ou un fichier `.env` (modèle : `.env.example`) :
+
+| Variable | Défaut | Effet |
+|---|---|---|
+| `OLLAMA_MODEL` | `qwen3:8b` | modèle utilisé (`compose.yaml` seulement ; les variantes le fixent en dur) |
+| `OLLAMA_TIMEOUT` | `600` | secondes accordées à une génération |
+| `HOSTFS_PATH` | dossier parent du dépôt | dossier de l'hôte visible par le Scanner, en lecture seule sur `/hostfs` |
 
 ```bash
-# 1. Extraire le projet
-unzip promptforge.zip -d promptforge
-cd promptforge
-
-# 2. Créer le dossier de données (IMPORTANT pour la persistance!)
-mkdir -p ./data/projects
-
-# 3. Lancer tout (Ollama + Interface Web)
-docker compose up -d
-
-# 4. Attendre que le modèle soit téléchargé (~2-5 min)
-docker compose logs -f ollama-pull
-
-# 5. Ouvrir l'interface
-# http://localhost:7860
+cp .env.example .env     # puis décommente ce dont tu as besoin
+docker compose up --force-recreate
 ```
 
-### Sans GPU (CPU uniquement)
+Contrôler ce que Compose va réellement appliquer, sans rien démarrer :
 
 ```bash
-# 1. Extraire le projet
-unzip promptforge.zip -d promptforge
-cd promptforge
-
-# 2. Créer le dossier de données (IMPORTANT!)
-mkdir -p ./data/projects
-
-# 3. Lancer avec le fichier CPU
-docker compose -f docker-compose.cpu.yml up -d
-
-# 4. Attendre le téléchargement du modèle
-docker compose -f docker-compose.cpu.yml logs -f ollama-pull
-
-# 5. Ouvrir l'interface
-# http://localhost:7860
+docker compose config | grep -A6 environment
 ```
 
 ---
 
-## 📦 Installation Détaillée
+## Données
 
-### Étape 1 : Extraire le projet
+| Hôte | Conteneur | Contenu |
+|---|---|---|
+| `./data` | `/data` | base SQLite, projets et historique : **à sauvegarder** |
+| `./projects` | `/app/example-projects` (lecture seule) | projets d'exemple |
+| `HOSTFS_PATH` | `/hostfs` (lecture seule) | dossiers analysables par le Scanner |
 
-```bash
-# Créer un dossier
-mkdir -p ~/promptforge
-cd ~/promptforge
-
-# Extraire
-unzip /chemin/vers/promptforge.zip -d .
-
-# Vérifier la structure
-ls -la
-# Vous devez voir: docker-compose.yml, Dockerfile.web, promptforge/, etc.
-```
-
-### Étape 2 : Construire les images Docker
-
-```bash
-# Construire l'image de l'interface web
-docker compose build promptforge-web
-
-# Vérifier
-docker images | grep promptforge
-```
-
-### Étape 3 : Démarrer Ollama
-
-```bash
-# Démarrer uniquement Ollama d'abord
-docker compose up -d ollama
-
-# Vérifier qu'il est healthy
-docker compose ps
-# ollama devrait être "healthy" après ~60 secondes
-```
-
-### Étape 4 : Télécharger le modèle LLM
-
-```bash
-# Méthode 1: Via le service automatique
-docker compose up ollama-pull
-
-# Méthode 2: Manuellement
-docker compose exec ollama ollama pull llama3.1
-
-# Vérifier les modèles installés
-docker compose exec ollama ollama list
-```
-
-### Étape 5 : Démarrer l'interface web
-
-```bash
-# Démarrer l'interface
-docker compose up -d promptforge-web
-
-# Vérifier les logs
-docker compose logs -f promptforge-web
-
-# Vous devez voir:
-# Running on local URL:  http://0.0.0.0:7860
-```
-
-### Étape 6 : Accéder à l'interface
-
-Ouvrez votre navigateur à l'adresse :
-
-🌐 **http://localhost:7860**
+Les modèles des variantes conteneurisées vivent dans un volume Docker
+(`promptforge-ollama-data` pour NVIDIA et CPU) : `docker compose down` les
+conserve, `docker compose down -v` les supprime.
 
 ---
 
-## ⚙️ Configuration
-
-### Variables d'environnement
-
-| Variable | Par défaut | Description |
-|----------|------------|-------------|
-| `OLLAMA_HOST` | `http://ollama:11434` | URL d'Ollama |
-| `GRADIO_SERVER_NAME` | `0.0.0.0` | Adresse d'écoute |
-| `GRADIO_SERVER_PORT` | `7860` | Port de l'interface |
-
-### Changer le port de l'interface
-
-Modifier `docker-compose.yml` :
-
-```yaml
-promptforge-web:
-  ports:
-    - "8080:7860"  # Interface sur le port 8080
-```
-
-### Persister les données
-
-Les données sont stockées dans :
-
-| Chemin local | Chemin container | Description |
-|--------------|------------------|-------------|
-| `./data/` | `/data/` | Base de données + projets créés |
-| `./data/projects/` | `/data/projects/` | Projets créés via l'interface |
-| `./data/promptforge.db` | `/data/promptforge.db` | Historique, config |
-| Volume `ollama-data` | `/root/.ollama` | Modèles Ollama téléchargés |
-
-**⚠️ Important:** Créez le dossier `data` avant le premier lancement pour éviter les problèmes de permissions :
+## Commandes utiles
 
 ```bash
-mkdir -p ./data/projects
+docker compose ps                       # état
+docker compose logs -f promptforge-web  # journaux de l'interface
+docker compose down                     # arrêt
+docker compose build --no-cache         # reconstruire après une mise à jour
 ```
 
-**Sauvegarder vos données:**
+Le `Makefile` enveloppe ces commandes et accepte une variante :
 
 ```bash
-# Sauvegarder tout
-tar -czvf promptforge-backup.tar.gz ./data
-
-# Restaurer
-tar -xzvf promptforge-backup.tar.gz
+make docker-start
+make docker-start COMPOSE_FILE=docker/compose/docker-compose.cpu.yml
+make help
 ```
 
 ---
 
-## 🎮 Utilisation
-
-### Interface Web
-
-1. **Onglet "✨ Reformater"**
-   - Sélectionner un projet
-   - Choisir le profil cible (Claude, GPT, Gemini...)
-   - Entrer votre prompt brut
-   - Cliquer sur "🚀 Reformater"
-   - Voir la recommandation de modèle
-
-2. **Onglet "📁 Projets"**
-   - Créer un nouveau projet
-   - Uploader un fichier `.md` de configuration
-   - Ou écrire la config manuellement
-
-3. **Onglet "📜 Historique"**
-   - Voir les reformatages passés
-   - Filtrer par projet
-
-4. **Onglet "💰 Comparaison"**
-   - Comparer les prix des modèles
-   - Calculer les coûts estimés
-
-### Créer un projet
-
-1. Aller dans l'onglet "📁 Projets"
-2. Entrer le nom du projet (ex: `mon-api`)
-3. Uploader un fichier `.md` ou écrire :
-
-```markdown
-# Mon Projet API
-
-## Stack
-- Python 3.12
-- FastAPI
-- PostgreSQL
-- Redis
-
-## Structure
-- src/api/ - Endpoints
-- src/models/ - Modèles SQLAlchemy
-- src/services/ - Logique métier
-
-## Conventions
-- snake_case pour les variables
-- Type hints obligatoires
-- Docstrings Google style
-```
-
-4. Cliquer sur "💾 Sauvegarder"
-
----
-
-## 🔄 Changer de Modèle Ollama
-
-### Modèles recommandés pour le reformatage
-
-| Modèle | Taille | RAM requise | Commande |
-|--------|--------|-------------|----------|
-| `llama3.2:3b` | 2 GB | 4 GB | Ultra-léger, rapide |
-| `llama3.1:8b` | 4.7 GB | 8 GB | **Recommandé** |
-| `mistral:7b` | 4.1 GB | 8 GB | Rapide, fiable |
-| `qwen2.5-coder:7b` | 4.7 GB | 8 GB | Excellent pour code |
-| `llama3.3:70b` | 40 GB | 48 GB | Premium (GPU requis) |
-
-### Installer un nouveau modèle
-
-```bash
-# Télécharger un modèle
-docker compose exec ollama ollama pull mistral:7b
-
-# Lister les modèles
-docker compose exec ollama ollama list
-
-# Supprimer un modèle (libérer de l'espace)
-docker compose exec ollama ollama rm llama3.1
-```
-
-### Changer le modèle par défaut
-
-Modifier `docker-compose.yml` dans la section `ollama-pull` :
-
-```yaml
-ollama-pull:
-  command:
-    - |
-      echo "Pulling mistral model..."
-      ollama pull mistral:7b
-      echo "Model ready!"
-```
-
-Ou modifier le code dans `promptforge/providers.py` :
-
-```python
-@dataclass
-class OllamaConfig:
-    host: str = "http://localhost:11434"
-    model: str = "mistral:7b"  # Changer ici
-```
-
----
-
-## 🔧 Dépannage
-
-### Problème : "Mes projets disparaissent après rebuild"
-
-C'est un problème de persistance des volumes Docker.
-
-```bash
-# 1. Vérifier que le dossier data existe
-ls -la ./data/
-
-# 2. Si vide ou inexistant, le créer
-mkdir -p ./data/projects
-
-# 3. Vérifier les permissions
-chmod -R 755 ./data
-
-# 4. Relancer sans rebuild
-docker compose up -d
-```
-
-**Note:** Utilisez `docker compose up -d` (sans `--build`) pour conserver les données. Utilisez `--build` uniquement quand vous modifiez le code.
-
-### Problème : "Ollama non disponible"
-
-```bash
-# Vérifier qu'Ollama tourne
-docker compose ps
-
-# Si "unhealthy", voir les logs
-docker compose logs ollama
-
-# Redémarrer
-docker compose restart ollama
-```
-
-### Problème : "Le modèle n'est pas téléchargé"
-
-```bash
-# Télécharger manuellement
-docker compose exec ollama ollama pull llama3.1
-
-# Vérifier
-docker compose exec ollama ollama list
-```
-
-### Problème : "GPU non détecté"
-
-```bash
-# Vérifier NVIDIA
-nvidia-smi
-
-# Vérifier Docker GPU
-docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
-
-# Si erreur, utiliser le mode CPU
-docker compose -f docker-compose.cpu.yml up -d
-```
-
-### Problème : "Port 7860 déjà utilisé"
-
-```bash
-# Voir ce qui utilise le port
-lsof -i :7860
-
-# Changer le port dans docker-compose.yml
-ports:
-  - "7861:7860"
-```
-
-### Problème : "Erreur de build"
-
-```bash
-# Reconstruire sans cache
-docker compose build --no-cache promptforge-web
-
-# Supprimer les anciennes images
-docker system prune -a
-```
-
-### Problème : "Lenteur extrême (CPU)"
-
-Si vous utilisez le mode CPU et que c'est trop lent :
-
-1. Utiliser un modèle plus petit :
-```bash
-docker compose exec ollama ollama pull llama3.2:3b
-```
-
-2. Ou installer le support GPU (voir prérequis)
-
----
-
-## 📝 Commandes Utiles
-
-### Gestion des services
-
-```bash
-# Démarrer tout
-docker compose up -d
-
-# Arrêter tout
-docker compose down
-
-# Redémarrer
-docker compose restart
-
-# Voir les logs en temps réel
-docker compose logs -f
-
-# Voir les logs d'un service
-docker compose logs -f promptforge-web
-docker compose logs -f ollama
-```
-
-### Gestion Ollama
-
-```bash
-# Lister les modèles
-docker compose exec ollama ollama list
-
-# Télécharger un modèle
-docker compose exec ollama ollama pull <model>
-
-# Supprimer un modèle
-docker compose exec ollama ollama rm <model>
-
-# Tester un modèle
-docker compose exec ollama ollama run llama3.1 "Hello!"
-```
-
-### Maintenance
-
-```bash
-# Voir l'espace disque utilisé
-docker system df
-
-# Nettoyer les ressources inutilisées
-docker system prune
-
-# Sauvegarder les données
-tar -czvf promptforge-backup.tar.gz ./data
-
-# Mettre à jour Ollama
-docker compose pull ollama
-docker compose up -d ollama
-```
-
-### Accéder au conteneur
-
-```bash
-# Shell dans le conteneur web
-docker compose exec promptforge-web bash
-
-# Shell dans Ollama
-docker compose exec ollama bash
-```
-
----
-
-## 🌐 Accès distant
-
-Pour accéder à l'interface depuis un autre PC :
-
-1. Trouver l'IP de votre machine :
-```bash
-ip addr show | grep inet
-# ou sur Windows: ipconfig
-```
-
-2. Accéder via : `http://<IP>:7860`
-
-3. Si firewall, ouvrir le port :
-```bash
-# Ubuntu
-sudo ufw allow 7860
-```
-
----
-
-## 📊 Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        Docker Network                        │
-│                                                             │
-│  ┌─────────────────┐     ┌─────────────────────────────┐   │
-│  │                 │     │                             │   │
-│  │     Ollama      │◄────│    PromptForge Web         │   │
-│  │   (Port 11434)  │     │      (Port 7860)           │   │
-│  │                 │     │                             │   │
-│  │  ┌───────────┐  │     │  ┌─────────────────────┐   │   │
-│  │  │ llama3.1  │  │     │  │   Interface Gradio  │   │   │
-│  │  │ mistral   │  │     │  │   + Recommandations │   │   │
-│  │  │ qwen2.5   │  │     │  │   + Comparateur     │   │   │
-│  │  └───────────┘  │     │  └─────────────────────┘   │   │
-│  │                 │     │                             │   │
-│  └────────┬────────┘     └──────────────┬──────────────┘   │
-│           │                             │                   │
-│           ▼                             ▼                   │
-│    ┌──────────────┐              ┌──────────────┐          │
-│    │ ollama-data  │              │   ./data/    │          │
-│    │   (Volume)   │              │  (Bind mount)│          │
-│    └──────────────┘              └──────────────┘          │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                    ┌─────────────────┐
-                    │   Navigateur    │
-                    │ localhost:7860  │
-                    └─────────────────┘
-```
-
----
-
-## ✅ Checklist de déploiement
-
-- [ ] Docker et Docker Compose installés
-- [ ] Projet extrait dans un dossier
-- [ ] `docker compose up -d` exécuté
-- [ ] Ollama en statut "healthy"
-- [ ] Modèle téléchargé (llama3.1)
-- [ ] Interface accessible sur http://localhost:7860
-- [ ] Test de reformatage réussi
-
----
-
-## 📞 Support
-
-En cas de problème :
-
-1. Vérifier les logs : `docker compose logs`
-2. Consulter la section [Dépannage](#-dépannage)
-3. Redémarrer les services : `docker compose restart`
-
----
-
-**Bon reformatage ! 🚀**
+## Dépannage
+
+- **L'interface affiche Ollama indisponible** (mode natif) : `curl
+  http://localhost:11434/api/tags` sur l'hôte doit répondre. Sinon, lance
+  `ollama serve`.
+- **« Le modèle '…' n'est pas installé »** : `ollama pull <modèle>` sur l'hôte,
+  ou via `docker compose -f <variante> exec ollama ollama pull <modèle>` pour
+  une variante conteneurisée.
+- **Port 7860 occupé** : un autre conteneur PromptForge tourne sans doute.
+  `docker compose ps`, puis `docker compose down`.
+- **Le Scanner ne voit pas un projet** : il ne voit que `HOSTFS_PATH`. Voir
+  Configuration.
+
+Le [README](../README.md#dépannage) détaille aussi les délais de génération et
+les erreurs courantes.

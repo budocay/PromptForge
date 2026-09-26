@@ -16,6 +16,6 @@ This package is modularized for maintainability:
 """
 
 from .interface import create_interface, launch_web
-from .ollama_helpers import set_base_path, get_forge
+from .ollama_helpers import get_forge, set_base_path
 
 __all__ = ["create_interface", "launch_web", "set_base_path", "get_forge"]

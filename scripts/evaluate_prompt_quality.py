@@ -11,11 +11,10 @@ entiere (D-001).
 """
 
 import json
+import sys
 import time
 import urllib.request
-import sys
 from dataclasses import dataclass
-from typing import Optional
 
 # ============================================
 # CONFIGURATION
@@ -59,70 +58,70 @@ TEST_PROMPTS = [
         "id": 1,
         "category": "SEO",
         "raw": "trouve moi des mots clés pour mon site de jardinage",
-        "expected_additions": ["niche", "volume", "difficulté", "intent"]
+        "expected_additions": ["niche", "volume", "difficulté", "intent"],
     },
     # Dev Backend
     {
         "id": 2,
         "category": "Dev",
         "raw": "crée une API REST pour gérer des utilisateurs",
-        "expected_additions": ["endpoints", "authentification", "validation", "erreurs"]
+        "expected_additions": ["endpoints", "authentification", "validation", "erreurs"],
     },
     # Marketing
     {
         "id": 3,
         "category": "Marketing",
         "raw": "écris moi un email de prospection",
-        "expected_additions": ["cible", "ton", "CTA", "objet"]
+        "expected_additions": ["cible", "ton", "CTA", "objet"],
     },
     # Data
     {
         "id": 4,
         "category": "Data",
         "raw": "analyse mes données de vente",
-        "expected_additions": ["métriques", "période", "dimensions", "visualisation"]
+        "expected_additions": ["métriques", "période", "dimensions", "visualisation"],
     },
     # Product
     {
         "id": 5,
         "category": "Product",
         "raw": "écris une user story pour le login",
-        "expected_additions": ["persona", "critères acceptation", "edge cases"]
+        "expected_additions": ["persona", "critères acceptation", "edge cases"],
     },
     # Support
     {
         "id": 6,
         "category": "Support",
         "raw": "réponds à ce client mécontent",
-        "expected_additions": ["ton", "solution", "empathie", "suivi"]
+        "expected_additions": ["ton", "solution", "empathie", "suivi"],
     },
     # RH
     {
         "id": 7,
         "category": "RH",
         "raw": "rédige une offre d'emploi pour un dev senior",
-        "expected_additions": ["stack", "missions", "avantages", "culture"]
+        "expected_additions": ["stack", "missions", "avantages", "culture"],
     },
     # Commercial
     {
         "id": 8,
         "category": "Sales",
         "raw": "prépare moi un pitch pour un prospect",
-        "expected_additions": ["pain points", "valeur", "différenciation", "objections"]
+        "expected_additions": ["pain points", "valeur", "différenciation", "objections"],
     },
     # Général - vague
     {
         "id": 9,
         "category": "Général",
         "raw": "aide moi avec mon projet",
-        "expected_additions": ["clarification", "contexte", "objectif"]
+        "expected_additions": ["clarification", "contexte", "objectif"],
     },
     # Technique complexe
     {
         "id": 10,
         "category": "Dev",
         "raw": "optimise ma requête SQL qui est lente",
-        "expected_additions": ["indexes", "explain", "volume données", "contraintes"]
+        "expected_additions": ["indexes", "explain", "volume données", "contraintes"],
     },
 ]
 
@@ -130,6 +129,7 @@ TEST_PROMPTS = [
 # ============================================
 # METRICS
 # ============================================
+
 
 @dataclass
 class TestResult:
@@ -146,7 +146,7 @@ class TestResult:
     additions_found: list
     additions_score: float  # % des additions attendues trouvées
     processing_time: float
-    error: Optional[str] = None
+    error: str | None = None
 
 
 def call_ollama(prompt: str, system: str) -> tuple[str, float]:
@@ -156,24 +156,21 @@ def call_ollama(prompt: str, system: str) -> tuple[str, float]:
         "prompt": prompt,
         "system": system,
         "stream": False,
-        "options": {
-            "temperature": 0.3,
-            "top_p": 0.9
-        }
+        "options": {"temperature": 0.3, "top_p": 0.9},
     }
 
     start = time.time()
 
     req = urllib.request.Request(
         OLLAMA_URL,
-        data=json.dumps(payload).encode('utf-8'),
+        data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
-        method="POST"
+        method="POST",
     )
 
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
-            result = json.loads(resp.read().decode('utf-8'))
+            result = json.loads(resp.read().decode("utf-8"))
             elapsed = time.time() - start
             return result.get("response", ""), elapsed
     except Exception as e:
@@ -185,7 +182,8 @@ def analyze_enrichment(raw: str, enriched: str, expected: list) -> TestResult:
 
     # Détection des balises XML
     import re
-    xml_tags = re.findall(r'<(\w+)>', enriched)
+
+    xml_tags = re.findall(r"<(\w+)>", enriched)
     xml_tags = list(set(xml_tags))  # Unique
 
     has_xml = len(xml_tags) >= 2  # Au moins 2 balises différentes
@@ -212,7 +210,7 @@ def analyze_enrichment(raw: str, enriched: str, expected: list) -> TestResult:
         expected_additions=expected,
         additions_found=found,
         additions_score=additions_score,
-        processing_time=0
+        processing_time=0,
     )
 
 
@@ -232,38 +230,46 @@ def run_tests() -> list[TestResult]:
         print(f"[{test['id']}/10] {test['category']}: {test['raw'][:40]}...")
 
         # Appel Ollama
-        enriched, elapsed = call_ollama(test['raw'], SYSTEM_PROMPT)
+        enriched, elapsed = call_ollama(test["raw"], SYSTEM_PROMPT)
 
         if enriched.startswith("ERROR"):
             print(f"  ❌ Erreur: {enriched}")
-            results.append(TestResult(
-                prompt_id=test['id'],
-                category=test['category'],
-                raw_prompt=test['raw'],
-                enriched_prompt="",
-                raw_length=len(test['raw']),
-                enriched_length=0,
-                enrichment_ratio=0,
-                has_xml_structure=False,
-                xml_tags_found=[],
-                expected_additions=test['expected_additions'],
-                additions_found=[],
-                additions_score=0,
-                processing_time=elapsed,
-                error=enriched
-            ))
+            results.append(
+                TestResult(
+                    prompt_id=test["id"],
+                    category=test["category"],
+                    raw_prompt=test["raw"],
+                    enriched_prompt="",
+                    raw_length=len(test["raw"]),
+                    enriched_length=0,
+                    enrichment_ratio=0,
+                    has_xml_structure=False,
+                    xml_tags_found=[],
+                    expected_additions=test["expected_additions"],
+                    additions_found=[],
+                    additions_score=0,
+                    processing_time=elapsed,
+                    error=enriched,
+                )
+            )
             continue
 
         # Analyse
-        result = analyze_enrichment(test['raw'], enriched, test['expected_additions'])
-        result.prompt_id = test['id']
-        result.category = test['category']
+        result = analyze_enrichment(test["raw"], enriched, test["expected_additions"])
+        result.prompt_id = test["id"]
+        result.category = test["category"]
         result.processing_time = elapsed
 
         # Affichage rapide
-        print(f"  📊 {result.raw_length} → {result.enriched_length} chars (×{result.enrichment_ratio:.1f})")
-        print(f"  🏷️  XML: {'✅' if result.has_xml_structure else '❌'} | Tags: {result.xml_tags_found[:5]}")
-        print(f"  🎯 Additions: {len(result.additions_found)}/{len(result.expected_additions)} ({result.additions_score*100:.0f}%)")
+        print(
+            f"  📊 {result.raw_length} → {result.enriched_length} chars (×{result.enrichment_ratio:.1f})"
+        )
+        print(
+            f"  🏷️  XML: {'✅' if result.has_xml_structure else '❌'} | Tags: {result.xml_tags_found[:5]}"
+        )
+        print(
+            f"  🎯 Additions: {len(result.additions_found)}/{len(result.expected_additions)} ({result.additions_score*100:.0f}%)"
+        )
         print(f"  ⏱️  {elapsed:.1f}s")
         print()
 
@@ -309,7 +315,7 @@ def print_summary(results: list[TestResult]):
     print("🎯 VERDICT")
     print("=" * 60)
 
-    score = (xml_success * 0.3) + (avg_additions * 0.5) + (min(avg_ratio/20, 1) * 0.2)
+    score = (xml_success * 0.3) + (avg_additions * 0.5) + (min(avg_ratio / 20, 1) * 0.2)
 
     if score >= 0.7:
         print(f"✅ VALEUR CONFIRMÉE (score: {score*100:.0f}%)")
@@ -349,7 +355,7 @@ def print_summary(results: list[TestResult]):
     if valid_results:
         r = valid_results[0]
         print(f"\n🔴 AVANT ({r.raw_length} chars):")
-        print(f"   \"{r.raw_prompt}\"")
+        print(f'   "{r.raw_prompt}"')
         print(f"\n🟢 APRÈS ({r.enriched_length} chars):")
         print("-" * 40)
         # Afficher les 1000 premiers caractères
