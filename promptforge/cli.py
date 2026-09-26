@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from .core import PromptForge
+from .profiles import list_profiles
 
 
 def get_forge(base_path: str | None = None) -> PromptForge:
@@ -141,7 +142,10 @@ def cmd_format(args):
 
     check_cves = getattr(args, "check_cves", False)
     success, message, formatted, security_ctx = forge.format_prompt(
-        raw_prompt, args.project, check_cves=check_cves
+        raw_prompt,
+        args.project,
+        profile_name=getattr(args, "profile", None),
+        check_cves=check_cves,
     )
 
     if success:
@@ -442,6 +446,11 @@ def main():
     format_parser.add_argument("prompt", nargs="?", help="Prompt à reformater (interactif si omis)")
     format_parser.add_argument("--project", help="Projet à utiliser (défaut: actif)")
     format_parser.add_argument("--model", "-m", help="Modèle Ollama à utiliser")
+    format_parser.add_argument(
+        "--profile",
+        choices=list_profiles(),
+        help="Modèle cible du prompt reformaté (défaut: prompt XML générique)",
+    )
     format_parser.add_argument(
         "--copy", "-c", action="store_true", help="Copier dans le presse-papier"
     )

@@ -294,3 +294,43 @@ class TestCliOutput:
 
         captured = capsys.readouterr()
         assert "→" in captured.out  # Marqueur projet actif
+
+
+class TestFormatProfileOption:
+    """`promptforge format --profile` choisit le modèle cible, comme le web."""
+
+    def test_profile_is_passed_to_the_core(self, temp_dir):
+        with patch("promptforge.cli.PromptForge.format_prompt") as fmt:
+            fmt.return_value = (True, "history.md", "## Objectif\nX", None)
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "promptforge",
+                    "--path",
+                    temp_dir,
+                    "format",
+                    "trie une liste",
+                    "--profile",
+                    "gpt_5.1",
+                ],
+            ):
+                main()
+        assert fmt.call_args.kwargs["profile_name"] == "gpt_5.1"
+
+    def test_without_profile_the_generic_prompt_is_used(self, temp_dir):
+        with patch("promptforge.cli.PromptForge.format_prompt") as fmt:
+            fmt.return_value = (True, "history.md", "<task>X</task>", None)
+            with patch.object(sys, "argv", ["promptforge", "--path", temp_dir, "format", "x"]):
+                main()
+        assert fmt.call_args.kwargs["profile_name"] is None
+
+    def test_unknown_profile_is_rejected_with_the_valid_list(self, temp_dir, capsys):
+        with patch.object(
+            sys, "argv", ["promptforge", "--path", temp_dir, "format", "x", "--profile", "gpt-4"]
+        ):
+            with pytest.raises(SystemExit):
+                main()
+        err = capsys.readouterr().err
+        assert "invalid choice" in err or "choix invalide" in err
+        assert "claude_sonnet_5" in err

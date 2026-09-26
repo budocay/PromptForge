@@ -509,3 +509,31 @@ class TestAssemblyIsLocked:
             f"{len(orphan_handlers)} gestionnaire(s) sans declencheur : "
             f"la fonction existe, rien ne la declenche."
         )
+
+
+class TestReformatStatusReportsConformance:
+    """Le statut dit à l'utilisateur quand la sortie ne respecte pas le profil."""
+
+    def _run(self, output, profile):
+        from unittest.mock import MagicMock, patch
+
+        from promptforge.web import interface
+
+        forge = MagicMock()
+        forge.format_prompt.return_value = (True, "history.md", output, None)
+        with patch.object(interface, "get_forge", return_value=forge):
+            return interface.format_prompt_with_ollama("écris un poème sur l'automne", "", profile)
+
+    def test_compliant_output_has_no_warning(self):
+        good = (
+            "## Objectif\nObtenir un poème sur l'automne, ton mélancolique.\n\n"
+            "## Format de sortie\nUn poème de quatre strophes."
+        )
+        _, status, *_ = self._run(good, "gpt_5.1")
+        assert status.startswith("✅")
+        assert "À vérifier" not in status
+
+    def test_executed_request_is_flagged(self):
+        _, status, *_ = self._run("Les feuilles tombent doucement dans le vent.", "gpt_5.1")
+        assert "À vérifier" in status
+        assert "exécutée" in status

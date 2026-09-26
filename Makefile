@@ -61,6 +61,9 @@ test-cov: ## Lancer les tests avec couverture
 test-fast: ## Lancer les tests sans les tests d'intégration
 	$(PYTEST) tests/ -v -m "not integration"
 
+eval: ## Banc d'evaluation du reformatage (Ollama requis ; ARGS="--json avant.json")
+	$(PYTHON) scripts/evaluate_prompt_quality.py $(ARGS)
+
 # ============================================
 # Qualité de code
 # ============================================
