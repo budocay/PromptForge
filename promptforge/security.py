@@ -810,7 +810,7 @@ def parse_cvss_vector(cvss_string: str) -> str:
 #     {"code":3,"message":"error in query at index 0: rpc error:
 #      code = InvalidArgument desc = invalid ecosystem"}
 #
-# `scanner.py` etiquette ses paquets avec les libelles de l'outillage reel
+# Le scanner (`promptforge/scanner/`) etiquette ses paquets avec les libelles de l'outillage reel
 # (`SwiftPM` est le gestionnaire, `Conan` est le client, `CMake` est le systeme
 # de construction) et ces libelles sont affiches a l'utilisateur. La traduction
 # vers les libelles OSV se fait donc ici, a la frontiere reseau, et nulle part

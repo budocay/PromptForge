@@ -638,7 +638,10 @@ def _ecosystems_emitted_by_scanner() -> set:
     demain sans traduction OSV fait echouer le test de parite ci-dessous, au
     lieu de produire un HTTP 400 silencieux en production.
     """
-    source = Path(scanner_module.__file__).read_text(encoding="utf-8")
+    # Le scanner est un paquet : on lit tous ses modules, pas le seul
+    # `__init__.py`, sinon un libelle emis par un sous-module echapperait.
+    package_dir = Path(scanner_module.__file__).parent
+    source = "\n".join(p.read_text(encoding="utf-8") for p in sorted(package_dir.glob("*.py")))
     return set(re.findall(r'ecosystem=["\']([^"\']+)["\']', source))
 
 

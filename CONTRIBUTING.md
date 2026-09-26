@@ -96,7 +96,8 @@ promptforge/
 ├── profiles.py      9 profils de modèles cibles
 ├── cli.py           interface argparse
 ├── tokens.py        estimation de tokens (tiktoken ou heuristique)
-├── scanner.py       scanner de projets
+├── scanner/         scanner de projets (signatures, models, lockfiles,
+│                    config_generator, core)
 ├── security.py      CVE via OSV.dev, règles de sécurité
 ├── models_catalog.py  catalogue des modèles Ollama locaux
 ├── hardware.py      mesure de la machine
@@ -105,6 +106,8 @@ promptforge/
 tests/               pytest
 docker/              Dockerfile, Dockerfile.web, compose/ (6 variantes GPU)
 compose.yaml         compose par défaut, à la racine
+launcher.py          tableau de bord local (port 7850) ; son interface est
+                     dans assets/launcher.html
 scripts/             outils de build
 docs/                documentation
 ```

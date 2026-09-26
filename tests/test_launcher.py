@@ -528,9 +528,12 @@ class TestLauncherConfig:
         pont = load_core_bridge()
         assert pont.available, f"catalogue du coeur illisible : {pont.error}"
 
+        # L'interface vit dans `assets/launcher.html` : elle est couverte
+        # par le meme verrou que le code Python.
+        contenu += (BASE_DIR / "assets" / "launcher.html").read_text(encoding="utf-8")
         residus = [tag for tag in pont.known_tags() if tag in contenu]
         assert not residus, (
-            f"tags du catalogue recopies dans launcher.py : {residus}. "
+            f"tags du catalogue recopies dans launcher.py ou son interface : {residus}. "
             "Le catalogue est unique (DEC-003) ; une copie diverge (D-022)."
         )
 
