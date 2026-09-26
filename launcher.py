@@ -3,18 +3,18 @@ PromptForge Launcher - Interface de contrôle
 Lance avec: python launcher.py
 """
 
-import subprocess
-import platform
-import os
-import socket
-import sys
 import json
+import os
+import platform
+import socket
+import subprocess
+import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
-import urllib.request
-import urllib.error
 
 # Port du launcher
 LAUNCHER_PORT = 7850
@@ -80,9 +80,9 @@ STATUS_UNKNOWN = "unknown"
 # Docker : les separer evite de payer 200 ms de sous-processus toutes les
 # deux secondes pour observer un demon qui, lui, ne demarre ni ne s'arrete
 # plusieurs fois par minute.
-FAST_PROBE_TTL = 2.0    # Ollama + PromptForge : cadence utile au client (3 s)
-SLOW_PROBE_TTL = 15.0   # Docker : evenement rare et lent, 15 s suffisent
-STALE_AFTER = 10.0      # Au-dela, l'interface declare son etat perime
+FAST_PROBE_TTL = 2.0  # Ollama + PromptForge : cadence utile au client (3 s)
+SLOW_PROBE_TTL = 15.0  # Docker : evenement rare et lent, 15 s suffisent
+STALE_AFTER = 10.0  # Au-dela, l'interface declare son etat perime
 
 # Delai des sondes HTTP. Court, parce que la boucle locale ne justifie pas
 # davantage : soit rien n'ecoute et l'echec est immediat, soit le service
@@ -111,7 +111,7 @@ state = {
     "installed_models": [],  # Liste des modèles Ollama installés
     "model_installed": False,  # True si le modèle recommandé est installé
     # Mesure materielle (DEC-001) et recommandation (DEC-003/DEC-006).
-    "hardware": None,        # Instantane serialisable de HardwareProfile
+    "hardware": None,  # Instantane serialisable de HardwareProfile
     "recommendation": None,  # Instantane serialisable de Recommendation
     # Tags tenant dans la memoire mesuree, catalogue COMPLET : sert a marquer
     # ce que la machine encaisse, licence comprise. `None` = rien de mesure,
@@ -129,7 +129,7 @@ state = {
     "docker_checked_at": None,  # Epoch de la derniere sonde Docker
     "probe_in_progress": False,  # Une sonde est en vol (evite l'empilement)
     "logs": [],
-    "action_in_progress": False
+    "action_in_progress": False,
 }
 
 # ---------------------------------------------------------------------------
@@ -162,7 +162,7 @@ def _bytes_to_gb(num_bytes):
     """Octets en Go binaires, dans l'unite qu'affichent les fiches sources."""
     if num_bytes is None:
         return None
-    return round(num_bytes / (1024 ** 3), 1)
+    return round(num_bytes / (1024**3), 1)
 
 
 def model_entry(model):
@@ -314,38 +314,38 @@ DOCKER_COMPOSE_OPTIONS = {
     "default": {
         "file": "compose.yaml",
         "label": "Par defaut (Ollama natif)",
-        "description": "Interface en conteneur, Ollama natif sur l'hote - Windows, macOS, Linux"
+        "description": "Interface en conteneur, Ollama natif sur l'hote - Windows, macOS, Linux",
     },
     "nvidia": {
         "file": "docker/compose/docker-compose.yml",
         "label": "NVIDIA (Docker)",
-        "description": "GPU NVIDIA expose a Docker - Ollama conteneurise"
+        "description": "GPU NVIDIA expose a Docker - Ollama conteneurise",
     },
     "win-nvidia-native": {
         "file": "docker/compose/docker-compose.win-nvidia.yml",
         "label": "Windows NVIDIA (Ollama natif)",
-        "description": "Si conflit de port: utilise Ollama natif Windows"
+        "description": "Si conflit de port: utilise Ollama natif Windows",
     },
     "win-amd": {
         "file": "docker/compose/docker-compose.win-amd.yml",
         "label": "Windows + AMD (Ollama natif)",
-        "description": "Pour Windows avec GPU AMD - Ollama tourne en natif"
+        "description": "Pour Windows avec GPU AMD - Ollama tourne en natif",
     },
     "linux-amd": {
         "file": "docker/compose/docker-compose.amd.yml",
         "label": "Linux + AMD",
-        "description": "Linux + GPU AMD (ROCm) - Ollama conteneurise"
+        "description": "Linux + GPU AMD (ROCm) - Ollama conteneurise",
     },
     "linux-amd-max": {
         "file": "docker/compose/docker-compose.amd-max.yml",
         "label": "Linux + AMD MAX (32B)",
-        "description": "Linux + GPU AMD (ROCm), variante large - Ollama conteneurise"
+        "description": "Linux + GPU AMD (ROCm), variante large - Ollama conteneurise",
     },
     "cpu": {
         "file": "docker/compose/docker-compose.cpu.yml",
         "label": "CPU uniquement",
-        "description": "Sans GPU expose - Ollama conteneurise, inference sur processeur"
-    }
+        "description": "Sans GPU expose - Ollama conteneurise, inference sur processeur",
+    },
 }
 
 
@@ -442,8 +442,8 @@ def check_installations():
             capture_output=True,
             text=True,
             timeout=3,
-            encoding='utf-8',
-            errors='replace'
+            encoding="utf-8",
+            errors="replace",
         )
         state["docker_installed"] = result.returncode == 0
         if state["docker_installed"]:
@@ -451,9 +451,9 @@ def check_installations():
     except FileNotFoundError:
         state["docker_installed"] = False
         log("Docker: Non installe")
-    except:
+    except (OSError, subprocess.SubprocessError):
         state["docker_installed"] = True  # En cas d'erreur, on suppose installé
-    
+
     # Vérifier Ollama (seulement sur Windows car sur Linux c'est dans Docker)
     if state["os"] == "Windows":
         try:
@@ -462,8 +462,8 @@ def check_installations():
                 capture_output=True,
                 text=True,
                 timeout=3,
-                encoding='utf-8',
-                errors='replace'
+                encoding="utf-8",
+                errors="replace",
             )
             state["ollama_installed"] = result.returncode == 0
             if state["ollama_installed"]:
@@ -471,7 +471,7 @@ def check_installations():
         except FileNotFoundError:
             state["ollama_installed"] = False
             log("Ollama: Non installe")
-        except:
+        except (OSError, subprocess.SubprocessError):
             state["ollama_installed"] = True
     else:
         # Sur Linux, Ollama est dans Docker, pas besoin de l'installer
@@ -482,6 +482,7 @@ def install_ollama_windows():
     """Ouvre la page de téléchargement Ollama pour Windows."""
     log("Ouverture page telechargement Ollama...")
     import webbrowser
+
     webbrowser.open("https://ollama.com/download/windows")
     log("Installez Ollama puis cliquez 'Rafraichir'")
 
@@ -490,6 +491,7 @@ def install_docker():
     """Ouvre la page de téléchargement Docker."""
     log("Ouverture page telechargement Docker...")
     import webbrowser
+
     if state["os"] == "Windows":
         webbrowser.open("https://docs.docker.com/desktop/install/windows-install/")
     elif state["os"] == "Darwin":
@@ -702,8 +704,8 @@ def check_docker():
             capture_output=True,
             text=True,
             timeout=10,
-            encoding='utf-8',
-            errors='replace'
+            encoding="utf-8",
+            errors="replace",
         )
     except subprocess.TimeoutExpired:
         log_change("docker", "Docker: indetermine (delai depasse)")
@@ -759,8 +761,7 @@ def check_ollama():
             log_change("ollama", f"Ollama: OK - {len(models)} modele(s) - {current_model} ✓")
         else:
             log_change(
-                "ollama",
-                f"Ollama: OK - {len(models)} modele(s) - ⚠️ {current_model} non installe!"
+                "ollama", f"Ollama: OK - {len(models)} modele(s) - ⚠️ {current_model} non installe!"
             )
         return set_service_status("ollama", STATUS_UP)
 
@@ -790,24 +791,24 @@ def is_model_installed(target_model, installed_models):
     """
     if not target_model or not installed_models:
         return False
-    
+
     # Normaliser le modèle cible
     if ":" in target_model:
         target_base, target_tag = target_model.split(":", 1)
     else:
         target_base, target_tag = target_model, "latest"
-    
+
     for installed in installed_models:
         # Normaliser le modèle installé
         if ":" in installed:
             inst_base, inst_tag = installed.split(":", 1)
         else:
             inst_base, inst_tag = installed, "latest"
-        
+
         # Cas 1: Correspondance exacte
         if target_model == installed:
             return True
-        
+
         # Cas 2: Même base, tags compatibles
         if target_base == inst_base:
             # Le tag installé commence par le tag cible (ex: 8b vs 8b-q4_0)
@@ -816,7 +817,7 @@ def is_model_installed(target_model, installed_models):
             # Le modèle cible est le base et latest est installé
             if target_tag == "latest" or inst_tag == "latest":
                 return True
-    
+
     return False
 
 
@@ -952,19 +953,25 @@ def check_docker_images():
         state["docker_images"] = {}
         state["rebuild_needed"] = True
         return
-    
+
     try:
         # Lister les images du projet
         result = subprocess.run(
-            ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}|{{.CreatedAt}}|{{.Size}}", 
-             "--filter", "reference=*promptforge*"],
+            [
+                "docker",
+                "images",
+                "--format",
+                "{{.Repository}}:{{.Tag}}|{{.CreatedAt}}|{{.Size}}",
+                "--filter",
+                "reference=*promptforge*",
+            ],
             capture_output=True,
             text=True,
-            encoding='utf-8',
-            errors='replace',
-            timeout=10
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
         )
-        
+
         images = {}
         if result.returncode == 0 and result.stdout.strip():
             for line in result.stdout.strip().split("\n"):
@@ -972,22 +979,18 @@ def check_docker_images():
                     parts = line.split("|")
                     if len(parts) >= 3:
                         name = parts[0]
-                        images[name] = {
-                            "exists": True,
-                            "created": parts[1],
-                            "size": parts[2]
-                        }
-        
+                        images[name] = {"exists": True, "created": parts[1], "size": parts[2]}
+
         state["docker_images"] = images
-        
+
         # Vérifier si un rebuild est nécessaire
         state["rebuild_needed"] = check_rebuild_needed()
-        
+
         if images:
             log_change("images", f"Images Docker: {len(images)} trouvee(s)")
         else:
             log_change("images", "Images Docker: Aucune (build necessaire)")
-            
+
     except Exception as e:
         log_change("images", f"Erreur verification images: {e}")
         state["docker_images"] = {}
@@ -999,17 +1002,17 @@ def check_rebuild_needed():
     # Si aucune image n'existe, rebuild nécessaire
     if not state["docker_images"]:
         return True
-    
+
     # Vérifier si les Dockerfiles ont été modifiés après le dernier build
     try:
         dockerfiles = ["Dockerfile", "Dockerfile.web"]
         latest_dockerfile_time = 0
-        
+
         for df in dockerfiles:
             if os.path.exists(df):
                 mtime = os.path.getmtime(df)
                 latest_dockerfile_time = max(latest_dockerfile_time, mtime)
-        
+
         # Vérifier aussi les fichiers source Python
         src_dir = "promptforge"
         if os.path.isdir(src_dir):
@@ -1017,18 +1020,15 @@ def check_rebuild_needed():
                 if f.endswith(".py"):
                     mtime = os.path.getmtime(os.path.join(src_dir, f))
                     latest_dockerfile_time = max(latest_dockerfile_time, mtime)
-        
-        # Comparer avec le temps de création des images
-        for img_info in state["docker_images"].values():
-            created_str = img_info.get("created", "")
-            # Format: "2024-01-15 10:30:00 +0000 UTC"
-            # Simplification: on considère rebuild nécessaire si fichiers modifiés récemment
-            pass
-        
+
+        # La date de creation des images n'est pas encore comparee aux
+        # fichiers sources : la fonction se contente d'horodater le dernier
+        # changement et rend False.
+
         state["last_build_time"] = latest_dockerfile_time
         return False
-        
-    except Exception as e:
+
+    except Exception:
         return True
 
 
@@ -1037,22 +1037,22 @@ def rebuild_docker_images(force=False):
     compose_key = state.get("docker_compose_file", "default")
     compose_info = DOCKER_COMPOSE_OPTIONS.get(compose_key, DOCKER_COMPOSE_OPTIONS["default"])
     compose_file = compose_info["file"]
-    
+
     if not os.path.exists(compose_file):
         log(f"ERREUR: Fichier {compose_file} non trouve!")
         return False
-    
+
     log(f"Reconstruction des images Docker{' (no-cache)' if force else ''}...")
-    
+
     # Arrêter les conteneurs existants d'abord
     log("Arret des conteneurs existants...")
     subprocess.run(
         ["docker", "compose", "-f", compose_file, "down", "--remove-orphans"],
         capture_output=True,
-        encoding='utf-8',
-        errors='replace'
+        encoding="utf-8",
+        errors="replace",
     )
-    
+
     # IMPORTANT: Mettre à jour l'état immédiatement après l'arrêt
     # pour que le bouton d'accès UI soit masqué
     state["promptforge_running"] = False
@@ -1061,20 +1061,14 @@ def rebuild_docker_images(force=False):
     # ce n'est pas une mesure indeterminee.
     state["promptforge_status"] = STATUS_DOWN
     state["ollama_status"] = STATUS_DOWN
-    
+
     # Construire les images
     cmd = ["docker", "compose", "-f", compose_file, "build"]
     if force:
         cmd.append("--no-cache")
-    
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        encoding='utf-8',
-        errors='replace'
-    )
-    
+
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+
     if result.returncode == 0:
         log("Images reconstruites avec succes")
         check_docker_images()
@@ -1089,7 +1083,7 @@ def rebuild_docker_images(force=False):
 def clean_docker():
     """Nettoie les images et conteneurs Docker du projet."""
     log("Nettoyage Docker en cours...")
-    
+
     # IMPORTANT: Mettre à jour l'état immédiatement
     # pour que le bouton d'accès UI soit masqué pendant le nettoyage
     state["promptforge_running"] = False
@@ -1098,25 +1092,22 @@ def clean_docker():
     # ce n'est pas une mesure indeterminee.
     state["promptforge_status"] = STATUS_DOWN
     state["ollama_status"] = STATUS_DOWN
-    
+
     # Arrêter tous les conteneurs du projet
     for key, info in DOCKER_COMPOSE_OPTIONS.items():
         if os.path.exists(info["file"]):
             subprocess.run(
                 ["docker", "compose", "-f", info["file"], "down", "-v", "--rmi", "local"],
                 capture_output=True,
-                encoding='utf-8',
-                errors='replace'
+                encoding="utf-8",
+                errors="replace",
             )
-    
+
     # Supprimer les images orphelines
     subprocess.run(
-        ["docker", "image", "prune", "-f"],
-        capture_output=True,
-        encoding='utf-8',
-        errors='replace'
+        ["docker", "image", "prune", "-f"], capture_output=True, encoding="utf-8", errors="replace"
     )
-    
+
     log("Nettoyage termine")
     check_docker_images()
 
@@ -1130,11 +1121,11 @@ def start_ollama():
         env["OLLAMA_HOST"] = "0.0.0.0:11434"
         if state["gfx_version"]:
             env["HSA_OVERRIDE_GFX_VERSION"] = state["gfx_version"]
-        
+
         subprocess.Popen(
             ["ollama", "serve"],
             env=env,
-            creationflags=subprocess.CREATE_NO_WINDOW if state["os"] == "Windows" else 0
+            creationflags=subprocess.CREATE_NO_WINDOW if state["os"] == "Windows" else 0,
         )
         time.sleep(5)
         check_ollama()
@@ -1146,10 +1137,12 @@ def stop_ollama():
     """Arrête Ollama."""
     if state["os"] == "Windows":
         log("Arret d'Ollama...")
-        subprocess.run(["taskkill", "/IM", "ollama.exe", "/F"], 
-                      capture_output=True,
-                      encoding='utf-8',
-                      errors='replace')
+        subprocess.run(
+            ["taskkill", "/IM", "ollama.exe", "/F"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         time.sleep(2)
         check_ollama()
 
@@ -1157,24 +1150,24 @@ def stop_ollama():
 def start_promptforge():
     """Démarre PromptForge via Docker."""
     log("Demarrage de PromptForge...")
-    
+
     # Utiliser le docker-compose sélectionné
     compose_key = state.get("docker_compose_file", "default")
     compose_info = DOCKER_COMPOSE_OPTIONS.get(compose_key, DOCKER_COMPOSE_OPTIONS["default"])
     compose_file = compose_info["file"]
-    
+
     log(f"Utilisation de {compose_file} ({compose_info['label']})")
-    
+
     # Vérifier que le fichier existe
     if not os.path.exists(compose_file):
         log(f"ERREUR: Fichier {compose_file} non trouve!")
         return
-    
+
     # Créer le dossier data s'il n'existe pas (pour la persistance SQLite)
     os.makedirs("data", exist_ok=True)
     os.makedirs("data/projects", exist_ok=True)
     os.makedirs("data/history", exist_ok=True)
-    
+
     # Sur Windows, arrêter Ollama natif si on utilise une config Docker avec Ollama
     # (pour éviter le conflit de port 11434)
     if state["os"] == "Windows" and compose_key not in ["default", "win-nvidia-native", "win-amd"]:
@@ -1182,73 +1175,70 @@ def start_promptforge():
         subprocess.run(
             ["taskkill", "/IM", "ollama.exe", "/F"],
             capture_output=True,
-            encoding='utf-8',
-            errors='replace'
+            encoding="utf-8",
+            errors="replace",
         )
         # Aussi arrêter le service Ollama s'il existe
         subprocess.run(
-            ["sc", "stop", "ollama"],
-            capture_output=True,
-            encoding='utf-8',
-            errors='replace'
+            ["sc", "stop", "ollama"], capture_output=True, encoding="utf-8", errors="replace"
         )
         time.sleep(2)  # Attendre la libération du port
-    
+
     # Arrêter les conteneurs existants pour éviter les conflits
     log("Nettoyage des conteneurs existants...")
     subprocess.run(
         ["docker", "compose", "-f", compose_file, "down", "--remove-orphans"],
         capture_output=True,
-        encoding='utf-8',
-        errors='replace'
+        encoding="utf-8",
+        errors="replace",
     )
-    
+
     # Démarrer les services
     log("Lancement des services...")
     result = subprocess.run(
         ["docker", "compose", "-f", compose_file, "up", "-d", "--build"],
         capture_output=True,
         text=True,
-        encoding='utf-8',
-        errors='replace'
+        encoding="utf-8",
+        errors="replace",
     )
-    
+
     if result.returncode == 0:
         log("Docker compose demarre")
         time.sleep(10)
     else:
         error_msg = result.stderr[:200] if result.stderr else "Erreur inconnue"
         log(f"Erreur: {error_msg}")
-    
+
     check_promptforge()
 
 
 def stop_promptforge():
     """Arrête PromptForge."""
     log("Arret de PromptForge...")
-    
+
     # Arrêter avec le fichier actuel
     compose_key = state.get("docker_compose_file", "default")
     compose_info = DOCKER_COMPOSE_OPTIONS.get(compose_key, DOCKER_COMPOSE_OPTIONS["default"])
     compose_file = compose_info["file"]
-    
+
     subprocess.run(
         ["docker", "compose", "-f", compose_file, "down"],
         capture_output=True,
-        encoding='utf-8',
-        errors='replace'
+        encoding="utf-8",
+        errors="replace",
     )
-    
+
     # Aussi essayer les autres au cas où
     for key, info in DOCKER_COMPOSE_OPTIONS.items():
         if key != compose_key:
             subprocess.run(
                 ["docker", "compose", "-f", info["file"], "down"],
                 capture_output=True,
-                encoding='utf-8',
-                errors='replace'
+                encoding="utf-8",
+                errors="replace",
             )
-    
+
     time.sleep(2)
     check_promptforge()
 
@@ -1257,16 +1247,16 @@ def pull_model(model_name):
     """Télécharge un modèle Ollama."""
     log(f"Telechargement de {model_name}...")
     state["ollama_model"] = model_name
-    
+
     try:
         result = subprocess.run(
             ["ollama", "pull", model_name],
             capture_output=True,
             text=True,
-            encoding='utf-8',
-            errors='replace'
+            encoding="utf-8",
+            errors="replace",
         )
-        
+
         if result.returncode == 0:
             log(f"Modele {model_name} pret")
             # Rafraîchir la liste des modèles installés
@@ -1418,8 +1408,8 @@ HTML_TEMPLATE = """
             font-size: 1em;
             cursor: pointer;
         }
-        select option { 
-            background: #1a1a2e; 
+        select option {
+            background: #1a1a2e;
             color: #fff;
             padding: 8px;
         }
@@ -1476,7 +1466,7 @@ HTML_TEMPLATE = """
             </svg>
             <span>Prompt<span style="color: #ff6b35;">Forge</span> Launcher</span>
         </h1>
-        
+
         <!-- Détection système -->
         <div class="card" id="system-card">
             <h2>🖥️ Systeme detecte<span class="freshness" id="freshness">Etat jamais verifie</span></h2>
@@ -1508,17 +1498,17 @@ HTML_TEMPLATE = """
                 </div>
             </div>
         </div>
-        
+
         <!-- Alertes d'installation (Windows uniquement) -->
         <div class="card" id="install-alert" style="display: none; border-left: 4px solid #ffa502;">
             <h2>⚠️ Installation requise</h2>
             <div id="alert-content"></div>
         </div>
-        
+
         <!-- Contrôles -->
         <div class="card">
             <h2>⚡ Controles</h2>
-            
+
             <!-- Configuration Docker Compose -->
             <div class="config-section" style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin-bottom: 15px;">
                 <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
@@ -1554,7 +1544,7 @@ HTML_TEMPLATE = """
                 </div>
                 <div id="compose-description" style="margin-top: 10px; font-size: 0.85em; color: #888;"></div>
             </div>
-            
+
             <div class="btn-grid">
                 <button class="btn btn-primary" onclick="action('start_ollama')" id="btn-ollama-start">
                     ▶️ Demarrer Ollama
@@ -1575,7 +1565,7 @@ HTML_TEMPLATE = """
                     🔄 Rafraichir
                 </button>
             </div>
-            
+
             <!-- Outils Docker -->
             <div style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px;">
                 <h3 style="margin-bottom: 10px; font-size: 1em; color: #aaa;">🐳 Outils Docker</h3>
@@ -1595,7 +1585,7 @@ HTML_TEMPLATE = """
                     </button>
                 </div>
             </div>
-            
+
             <div style="margin-top: 15px;">
                 <label title="N'affecte que le choix du fichier compose. La recommandation de modele depend de la memoire mesuree, pas de la marque.">Forcer la marque du GPU (choix du compose uniquement):</label>
                 <select id="force-gpu" onchange="forceGpu(this.value)">
@@ -1606,7 +1596,7 @@ HTML_TEMPLATE = """
                 </select>
             </div>
         </div>
-        
+
         <!-- Accès PromptForge -->
         <div class="card" id="access-card" style="display: none;">
             <h2>✅ Tout est pret!</h2>
@@ -1614,7 +1604,7 @@ HTML_TEMPLATE = """
                 🚀 Acceder a PromptForge
             </button>
         </div>
-        
+
         <!-- Logs -->
         <div class="card">
             <h2>📋 Logs</h2>
@@ -1622,7 +1612,7 @@ HTML_TEMPLATE = """
             <div id="debug" style="margin-top:10px; padding:10px; background:#330; color:#ff0; font-family:monospace; font-size:12px; border-radius:5px;">JS Loading...</div>
         </div>
     </div>
-    
+
     <script>
         function updateUI(data) {
             try {
@@ -1649,7 +1639,7 @@ HTML_TEMPLATE = """
                 }
                 if (gpuCard) gpuCard.className = 'status-item gpu-' + (data.gpu_type || 'unknown');
                 updateMemory(data);
-                
+
                 // Fraicheur de la mesure affichee
                 updateFreshness(data);
 
@@ -1706,7 +1696,7 @@ HTML_TEMPLATE = """
 
                 // Alertes d'installation
                 updateInstallAlerts(data);
-                
+
                 // Bouton accès
                 const accessCard = document.getElementById('access-card');
                 // Masque seulement sur un « eteint » mesure. Sur un etat
@@ -1714,13 +1704,13 @@ HTML_TEMPLATE = """
                 // au mieux il marche - et cacher l'acces au produit sur une
                 // absence de mesure est precisement le defaut corrige ici.
                 if (accessCard) accessCard.style.display = (data.promptforge_status === 'down') ? 'none' : 'block';
-                
+
                 // Docker Compose selector
                 updateComposeSelector(data);
-                
+
                 // État des images Docker
                 updateDockerImagesStatus(data);
-                
+
                 // Liste des modeles, recommandation, licences et reserve de
                 // DEC-006. `updateLicenses` vient apres la liste : elle dit
                 // ce que la liste propose, et ce qu'elle ecarte.
@@ -1748,20 +1738,20 @@ HTML_TEMPLATE = """
                         modelStatus.title = 'Modele non installe - cliquez sur Telecharger';
                     }
                 }
-                
+
                 // Logs
                 const logsEl = document.getElementById('logs');
                 if (logsEl && data.logs) {
                     logsEl.innerHTML = data.logs.map(function(l) { return '<div>' + l + '</div>'; }).join('');
                     logsEl.scrollTop = logsEl.scrollHeight;
                 }
-                
+
                 // Boutons
                 const btnOllamaStart = document.getElementById('btn-ollama-start');
                 const btnOllamaStop = document.getElementById('btn-ollama-stop');
                 const btnPfStart = document.getElementById('btn-pf-start');
                 const btnPfStop = document.getElementById('btn-pf-stop');
-                
+
                 // Sur un etat indetermine, les DEUX boutons restent actifs :
                 // un etat qu'on ne connait pas ne doit jamais verrouiller
                 // l'utilisateur hors de son produit.
@@ -1773,15 +1763,15 @@ HTML_TEMPLATE = """
                 console.error('Erreur updateUI:', e);
             }
         }
-        
+
         function updateInstallAlerts(data) {
             try {
                 const alertCard = document.getElementById('install-alert');
                 const alertContent = document.getElementById('alert-content');
                 if (!alertCard || !alertContent) return;
-                
+
                 let alerts = [];
-            
+
             // Docker non installé (tous OS)
             if (!data.docker_installed) {
                 alerts.push(
@@ -1792,7 +1782,7 @@ HTML_TEMPLATE = """
                     '</div>'
                 );
             }
-            
+
             // Ollama non installé (Windows seulement, car sur Linux c'est dans Docker)
             if (data.os === 'Windows' && !data.ollama_installed) {
                 alerts.push(
@@ -1803,7 +1793,7 @@ HTML_TEMPLATE = """
                     '</div>'
                 );
             }
-            
+
             // Modèle non installé (quand Ollama est actif)
             if (data.ollama_running && !data.model_installed && data.ollama_model) {
                 var modelName = data.ollama_model;
@@ -1817,7 +1807,7 @@ HTML_TEMPLATE = """
                     '</div>'
                 );
             }
-            
+
             if (alerts.length > 0) {
                 alertCard.style.display = 'block';
                 alertContent.innerHTML = alerts.join('');
@@ -1828,7 +1818,7 @@ HTML_TEMPLATE = """
                 console.error('Erreur updateInstallAlerts:', e);
             }
         }
-        
+
         // Fraicheur de l'etat affiche.
         //
         // Un etat sans date ment des qu'il vieillit. Trois rendus :
@@ -1887,7 +1877,7 @@ HTML_TEMPLATE = """
                 console.error('Erreur updateComposeSelector:', e);
             }
         }
-        
+
         // ------------------------------------------------------------------
         // Materiel mesure, catalogue et recommandation
         // ------------------------------------------------------------------
@@ -2150,7 +2140,7 @@ HTML_TEMPLATE = """
                 console.error('Erreur onModelChange:', e);
             }
         }
-        
+
         async function selectCompose(composeKey) {
             try {
                 const resp = await fetch('/api/action', {
@@ -2164,7 +2154,7 @@ HTML_TEMPLATE = """
                 console.error('Erreur selectCompose:', e);
             }
         }
-        
+
         async function action(act) {
             try {
                 // Pas de tag de repli : si aucun modele n'est retenu, le
@@ -2182,25 +2172,25 @@ HTML_TEMPLATE = """
                 console.error('Erreur action:', e);
             }
         }
-        
+
         function openPromptForge() {
             window.open('http://localhost:7860', '_blank');
         }
-        
+
         function confirmClean() {
             if (confirm('⚠️ Ceci va supprimer toutes les images Docker du projet.\\nVous devrez les reconstruire.\\n\\nContinuer?')) {
                 action('clean_docker');
             }
         }
-        
+
         function updateDockerImagesStatus(data) {
             var el = document.getElementById('docker-images-status');
             if (!el) return;
-            
+
             var images = data.docker_images || {};
             var imageCount = Object.keys(images).length;
             var rebuildNeeded = data.rebuild_needed;
-            
+
             if (imageCount === 0) {
                 el.innerHTML = '⚠️ Aucune image - <strong>Build necessaire</strong>';
                 el.style.color = '#ff9800';
@@ -2212,7 +2202,7 @@ HTML_TEMPLATE = """
                 el.style.color = '#4caf50';
             }
         }
-        
+
         async function forceGpu(gpuType) {
             if (!gpuType) {
                 action('detect_hardware');
@@ -2226,7 +2216,7 @@ HTML_TEMPLATE = """
             const data = await resp.json();
             updateUI(data);
         }
-        
+
         async function refresh() {
             var dbg = document.getElementById('debug');
             try {
@@ -2253,7 +2243,7 @@ HTML_TEMPLATE = """
         // en 5 s au pire, sans que l'utilisateur ait rien a cliquer, et sans
         // lancer 200 ms de sous-processus Docker toutes les deux secondes.
         setInterval(refresh, 3000);
-        
+
         // Premier appel
         document.addEventListener('DOMContentLoaded', function() {
             var dbg = document.getElementById('debug');
@@ -2268,7 +2258,7 @@ HTML_TEMPLATE = """
 
 class LauncherHandler(SimpleHTTPRequestHandler):
     """Handler HTTP pour le launcher."""
-    
+
     def do_GET(self):
         if self.path == "/" or self.path == "/index.html":
             self.send_response(200)
@@ -2283,7 +2273,7 @@ class LauncherHandler(SimpleHTTPRequestHandler):
             self.send_json(status_payload())
         else:
             self.send_error(404)
-    
+
     def do_POST(self):
         if self.path == "/api/action":
             content_length = int(self.headers.get("Content-Length", 0))
@@ -2291,9 +2281,9 @@ class LauncherHandler(SimpleHTTPRequestHandler):
             data = json.loads(body)
             action = data.get("action")
             model = data.get("model") or state.get("ollama_model")
-            
+
             state["action_in_progress"] = True
-            
+
             if action == "start_ollama":
                 threading.Thread(target=start_ollama).start()
             elif action == "stop_ollama":
@@ -2346,8 +2336,10 @@ class LauncherHandler(SimpleHTTPRequestHandler):
                     state["ollama_model"] = new_model
                     installed = state.get("installed_models", [])
                     state["model_installed"] = is_model_installed(new_model, installed)
-                    log(f"Modele selectionne: {new_model}"
-                        + (" ✓" if state["model_installed"] else " (non installe)"))
+                    log(
+                        f"Modele selectionne: {new_model}"
+                        + (" ✓" if state["model_installed"] else " (non installe)")
+                    )
             elif action == "rebuild":
                 threading.Thread(target=rebuild_docker_images, args=(False,)).start()
             elif action == "rebuild_force":
@@ -2360,13 +2352,13 @@ class LauncherHandler(SimpleHTTPRequestHandler):
                 install_docker()
             elif action == "check_install":
                 check_installations()
-            
+
             time.sleep(1)
             state["action_in_progress"] = False
             self.send_json(status_payload())
         else:
             self.send_error(404)
-    
+
     def send_json(self, data):
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -2374,7 +2366,7 @@ class LauncherHandler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache, no-store")
         self.end_headers()
         self.wfile.write(json.dumps(data).encode("utf-8"))
-    
+
     def log_message(self, format, *args):
         pass  # Désactiver les logs HTTP
 
@@ -2465,32 +2457,35 @@ def main():
     print("  PromptForge Launcher")
     print("=" * 50)
     print()
-    
+
     # Mesure initiale
     log("Demarrage du launcher...")
     detect_hardware()
     check_installations()
     select_docker_compose()
     refresh_status()
-    
+
     servers, threads, served = serve_loopback(LAUNCHER_PORT)
     log(f"Launcher accessible sur http://localhost:{LAUNCHER_PORT}")
     log("Ecoute sur " + ", ".join(f"{h}:{LAUNCHER_PORT}" for h in served))
     if "::1" not in served:
         # A dire, pas a taire : sur un systeme qui resout `localhost` en IPv6
         # d'abord, l'adresse imprimee ci-dessus ne repondrait pas.
-        log("IPv6 indisponible : utiliser http://127.0.0.1:%d si `localhost` ne repond pas"
-            % LAUNCHER_PORT)
-    
+        log(
+            f"IPv6 indisponible : utiliser http://127.0.0.1:{LAUNCHER_PORT} "
+            "si `localhost` ne repond pas"
+        )
+
     # Ouvrir le navigateur
     import webbrowser
+
     webbrowser.open(f"http://localhost:{LAUNCHER_PORT}")
-    
+
     print()
     print(f"Interface: http://localhost:{LAUNCHER_PORT}")
     print("Appuie sur Ctrl+C pour quitter")
     print()
-    
+
     try:
         while True:
             time.sleep(1)

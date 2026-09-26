@@ -10,6 +10,7 @@ PIP := $(PYTHON) -m pip
 PYTEST := $(PYTHON) -m pytest
 BLACK := $(PYTHON) -m black
 RUFF := $(PYTHON) -m ruff
+LINT_PATHS := promptforge/ tests/ scripts/ launcher.py start.py
 
 # Fichier compose par defaut (DEC-010) : seule l'interface tourne en conteneur,
 # Ollama reste natif sur l'hote. Il n'expose donc QU'UN service,
@@ -65,13 +66,13 @@ test-fast: ## Lancer les tests sans les tests d'intégration
 # ============================================
 
 lint: ## Vérifier le code avec ruff
-	$(RUFF) check promptforge/ tests/
+	$(RUFF) check $(LINT_PATHS)
 
 format: ## Formater le code avec black
-	$(BLACK) promptforge/ tests/
+	$(BLACK) $(LINT_PATHS)
 
 format-check: ## Vérifier le formatage sans modifier
-	$(BLACK) --check promptforge/ tests/
+	$(BLACK) --check $(LINT_PATHS)
 
 # ============================================
 # Docker (cross-platform via Python)
