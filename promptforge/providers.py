@@ -309,6 +309,65 @@ class OllamaProvider:
             return False
 
 
+# Bloc de raisonnement des modèles « thinking » (qwen3, deepseek-r1...). Selon
+# la version d'Ollama et le modèle, il peut arriver dans `response` au lieu du
+# champ `thinking` : il ne doit jamais atteindre le prompt rendu.
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_UNCLOSED_THINK_RE = re.compile(r"^\s*<think>.*", re.DOTALL | re.IGNORECASE)
+_FENCED_RE = re.compile(r"^```[\w-]*\s*\n(.*?)\n?```\s*$", re.DOTALL)
+# Phrases d'annonce qu'un modèle place avant le prompt (« Voici le prompt
+# reformaté : »). Elles ne sont retirées que seules sur leur ligne et courtes.
+_PREAMBLE_RE = re.compile(
+    r"^\s*(voici|voil[aà]|bien s[uû]r|d'accord|ok|parfait|here is|here's|sure|certainly)\b.{0,160}$",
+    re.IGNORECASE,
+)
+
+
+def clean_model_output(text: str, expected_syntax: str = "any") -> str:
+    """Retire de la sortie du modèle ce qui n'appartient pas au prompt.
+
+    Dans l'ordre : blocs `<think>` de raisonnement, clôture de code qui
+    emballe toute la réponse, lignes d'annonce en tête. Pour une sortie XML,
+    le texte libre avant la première balise et après la dernière est aussi
+    retiré s'il est court : c'est de l'emballage, pas du contenu.
+    """
+    if not text:
+        return text
+    text = _THINK_BLOCK_RE.sub("", text)
+    if _UNCLOSED_THINK_RE.match(text) and "</think>" not in text.lower():
+        # Raisonnement tronqué (délai, limite de tokens) : il n'y a pas de
+        # prompt après, seulement du raisonnement.
+        return ""
+    text = text.strip()
+
+    fenced = _FENCED_RE.match(text)
+    if fenced:
+        text = fenced.group(1).strip()
+
+    lines = text.split("\n")
+    while lines and (not lines[0].strip() or _PREAMBLE_RE.match(lines[0])):
+        lines.pop(0)
+    text = "\n".join(lines).strip()
+
+    if expected_syntax == "xml":
+        first = re.search(r"<[A-Za-z_][\w-]*>", text)
+        last = None
+        for last in re.finditer(r"</[A-Za-z_][\w-]*>", text):
+            pass
+        if first and last:
+            head, tail = text[: first.start()], text[last.end() :]
+            if len(head.strip()) <= 200:
+                text = text[first.start() :]
+                tail_start = last.end() - first.start()
+            else:
+                tail_start = last.end()
+            if tail.strip() and len(tail.strip()) <= 300 and "<" not in tail:
+                text = text[:tail_start]
+        text = text.strip()
+
+    return text
+
+
 def is_markdown_format(text: str) -> bool:
     """
     Détecte si le texte est au format Markdown plutôt que XML.
@@ -550,12 +609,6 @@ def convert_markdown_to_xml(text: str, profile_name: str | None = None) -> str:
 
 REFORMAT_SYSTEM_PROMPT = """Tu transformes des demandes utilisateur en prompts XML ultra-structurés.
 
-⚠️ CONTEXTE: Outil de DÉVELOPPEMENT LOGICIEL (PromptForge).
-Les demandes concernent du code, de la programmation, des projets informatiques.
-- "scanner" = analyser du CODE SOURCE (pas d'OCR physique)
-- "projet" = projet de DÉVELOPPEMENT (repo git, fichiers)
-- "analyse" = analyse de CODE ou d'architecture
-
 RÈGLE ABSOLUE: Ta réponse DOIT être UNIQUEMENT des balises XML.
 ❌ INTERDIT: #, ##, **, -, ```, Markdown
 ✅ OBLIGATOIRE: <balise>contenu</balise>
@@ -596,11 +649,8 @@ Messages d'erreur non révélateurs
 </constraints>
 
 <output_format>
-Composant React/Vue avec:
-- Formulaire validé
-- Gestion d'erreurs
-- Styles responsives
-- Tests unitaires
+Composant de formulaire avec validation, gestion d'erreurs, styles responsives
+et tests unitaires.
 </output_format>
 
 RAPPEL:
@@ -651,33 +701,31 @@ def format_prompt_with_ollama(
         profile = get_profile(profile_name)
         system_prompt, full_prompt = build_reformat_prompt(raw_prompt, project_context, profile)
     else:
-        # Fallback simple
-        system_prompt = REFORMAT_SYSTEM_PROMPT
-        if project_context.strip():
-            full_prompt = f"""CONTEXTE PROJET:
-{project_context}
+        # Sans profil : prompt XML générique, mêmes règles communes.
+        from .profiles import NO_BULLSHIT_RULE, REFORMAT_RULES, build_user_prompt
 
-DEMANDE À REFORMATER:
-{raw_prompt}
-
-Réécris cette demande en prompt structuré."""
-        else:
-            full_prompt = f"""DEMANDE À REFORMATER:
-{raw_prompt}
-
-Réécris cette demande en prompt structuré."""
+        system_prompt = REFORMAT_SYSTEM_PROMPT + REFORMAT_RULES + NO_BULLSHIT_RULE
+        full_prompt = build_user_prompt(raw_prompt, project_context)
 
     # Générer avec Ollama
     result = provider.generate(full_prompt, system_prompt)
 
-    # POST-TRAITEMENT: Convertir Markdown -> XML si nécessaire
-    # Les petits modèles (8B et moins) génèrent souvent du Markdown
-    # même quand on leur demande du XML
+    from .profiles import SYNTAX_XML, get_expected_syntax
+
+    expected_syntax = get_expected_syntax(profile_name)
+
+    # POST-TRAITEMENT
+    # 1. Retirer ce qui n'est pas le prompt : raisonnement, emballage, annonce.
+    # 2. Convertir Markdown -> XML, et seulement quand le profil attend du XML.
+    #    Les petits modèles (8B et moins) rendent souvent du Markdown même
+    #    quand on leur demande du XML ; mais un profil GPT demande justement
+    #    du Markdown, et le convertir trahirait son prompt système.
     was_converted = False
     if result:
-        if is_markdown_format(result):
-            result = convert_markdown_to_xml(result, profile_name)
-            was_converted = True
+        result = clean_model_output(result, expected_syntax) or None
+    if result and expected_syntax == SYNTAX_XML and is_markdown_format(result):
+        result = convert_markdown_to_xml(result, profile_name)
+        was_converted = True
 
     if return_conversion_info:
         return (result, was_converted)

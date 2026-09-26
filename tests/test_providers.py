@@ -551,3 +551,141 @@ class TestOllamaModelFromEnvironment:
     def test_explicit_value_beats_the_environment(self, monkeypatch):
         monkeypatch.setenv("OLLAMA_MODEL", "phi4-mini")
         assert OllamaConfig(model="qwen3:14b").model == "qwen3:14b"
+
+
+# =============================================================================
+# POST-TRAITEMENT : LA SYNTAXE DU PROFIL EST PRESERVEE
+# =============================================================================
+
+
+class _CannedProvider:
+    """Provider qui rend une sortie fixée, sans Ollama."""
+
+    def __init__(self, output):
+        self.output = output
+        self.config = OllamaConfig(model="fake")
+        self.calls = []
+
+    def is_available(self):
+        return True
+
+    def generate(self, prompt, system_prompt="", num_ctx=16384):
+        self.calls.append((prompt, system_prompt))
+        return self.output
+
+
+MARKDOWN_OUTPUT = (
+    "## Objectif\nTrier une liste en Python.\n\n"
+    "## Exigences\n- Montrer sorted()\n- Montrer .sort()\n\n"
+    "## Format de sortie\nCode commenté."
+)
+
+
+class TestPostProcessingKeepsTheProfileSyntax:
+    """Un profil GPT demande du Markdown : le convertir en XML le trahissait."""
+
+    @pytest.mark.parametrize("profile", ["gpt_5.1", "gpt_5.6_terra", "gpt_5_pro"])
+    def test_markdown_profiles_keep_markdown(self, profile):
+        out, converted = format_prompt_with_ollama(
+            "trie une liste",
+            "",
+            provider=_CannedProvider(MARKDOWN_OUTPUT),
+            profile_name=profile,
+            return_conversion_info=True,
+        )
+        assert converted is False
+        assert out.startswith("## Objectif")
+        assert "<task>" not in out
+
+    @pytest.mark.parametrize("profile", ["claude_sonnet_5", "gemini_3.6_flash", None])
+    def test_xml_profiles_still_convert_stray_markdown(self, profile):
+        out, converted = format_prompt_with_ollama(
+            "trie une liste",
+            "",
+            provider=_CannedProvider(MARKDOWN_OUTPUT),
+            profile_name=profile,
+            return_conversion_info=True,
+        )
+        assert converted is True
+        assert "<task>" in out
+
+    def test_universal_profile_keeps_whichever_convention_was_chosen(self):
+        out, converted = format_prompt_with_ollama(
+            "trie une liste",
+            "",
+            provider=_CannedProvider(MARKDOWN_OUTPUT),
+            profile_name="universel",
+            return_conversion_info=True,
+        )
+        assert converted is False
+        assert out.startswith("## Objectif")
+
+    def test_every_profile_declares_the_syntax_its_prompt_asks_for(self):
+        from promptforge.profiles import (
+            PRESET_PROFILES,
+            SYNTAX_ANY,
+            SYNTAX_MARKDOWN,
+            SYNTAX_XML,
+            SYSTEM_PROMPTS,
+            TargetModel,
+            get_expected_syntax,
+        )
+
+        for name, profile in PRESET_PROFILES.items():
+            prompt = SYSTEM_PROMPTS[profile.target_model]
+            syntax = get_expected_syntax(name)
+            if profile.target_model is TargetModel.UNIVERSAL:
+                assert syntax == SYNTAX_ANY
+            elif "prompts Markdown" in prompt:
+                assert syntax == SYNTAX_MARKDOWN, name
+            else:
+                assert syntax == SYNTAX_XML, name
+
+
+class TestCleanModelOutput:
+    """Ce qui n'est pas le prompt ne doit pas atteindre l'utilisateur."""
+
+    def test_reasoning_block_is_removed(self):
+        from promptforge.providers import clean_model_output
+
+        out = clean_model_output(
+            "<think>\nJe dois structurer.\n</think>\n<task>\nX\n</task>", "xml"
+        )
+        assert out == "<task>\nX\n</task>"
+
+    def test_truncated_reasoning_yields_nothing(self):
+        from promptforge.providers import clean_model_output
+
+        assert clean_model_output("<think>\nJe réfléchis encore", "xml") == ""
+
+    def test_wrapping_code_fence_is_removed(self):
+        from promptforge.providers import clean_model_output
+
+        assert clean_model_output("```xml\n<task>\nX\n</task>\n```", "xml") == "<task>\nX\n</task>"
+
+    def test_announcement_line_is_removed(self):
+        from promptforge.providers import clean_model_output
+
+        out = clean_model_output("Voici le prompt reformaté :\n\n## Objectif\nX", "markdown")
+        assert out == "## Objectif\nX"
+
+    def test_short_wrapping_text_around_xml_is_removed(self):
+        from promptforge.providers import clean_model_output
+
+        out = clean_model_output(
+            "Bien entendu, le prompt suit.\n<task>\nX\n</task>\nN'hésite pas si besoin !", "xml"
+        )
+        assert out == "<task>\nX\n</task>"
+
+    def test_content_is_never_touched(self):
+        """Une ligne de contenu qui commence par « Voici » n'est pas une annonce."""
+        from promptforge.providers import clean_model_output
+
+        text = "## Objectif\nVoici ce qu'il faut produire : une liste.\n## Format\nTexte."
+        assert clean_model_output(text, "markdown") == text
+
+    def test_empty_output_after_cleanup_is_reported_as_failure(self):
+        out = format_prompt_with_ollama(
+            "x", "", provider=_CannedProvider("<think>rien</think>"), profile_name="gpt_5.1"
+        )
+        assert out is None
