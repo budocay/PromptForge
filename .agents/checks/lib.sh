@@ -64,41 +64,64 @@ accepte() {
   return 0
 }
 
-# empreinte_feature <F-id> <args git log>… : empreinte du contenu des commits « Feature: <F-id> » (hors
-# traçabilité : MEMORY/, PROJECT_LOG.md, ROADMAP.md), stable par rebase, PLUS la résolution de chaque merge
-# de la plage fait SUR la feature (premier parent qui contient déjà un de ses commits) : du code ajouté en
-# résolvant un conflit change l'empreinte. Un verdict vaut pour ce contenu-là.
+# empreinte_feature <F-id> <args git log>… : empreinte du contenu que les gates de <F-id> ont à juger, hors
+# traçabilité (MEMORY/, PROJECT_LOG.md, ROADMAP.md), stable par rebase. Y entrent : les commits « Feature:
+# <F-id> » ; et, parmi les commits de la plage qui DESCENDENT d'un de ces commits, la résolution de chaque
+# merge (quel que soit l'ordre des parents) et chaque commit d'agent sans feature ou « Feature: trivial »
+# (du code glissé après la revue). N'y entrent pas : les commits d'une autre feature (ses propres gates)
+# ni ceux du dev. Un verdict vaut pour ce contenu-là.
 commits_feature() { # commits_feature <F-id> <args git log>… : commits « Feature: <F-id> » (hors merges)
   local fid="$1"; shift
   git log --no-merges --format='%H %(trailers:key=Feature,valueonly,separator=)' "$@" \
     | awk -v f="$fid" '{gsub(/ /,"",$2)} $2==f {print $1}'
 }
+apres_feature() { # apres_feature "<commits F>" <args git log>… : « M <merge> » / « C <commit> » à compter en plus
+  local cs="$1"; shift
+  git log --format='%H|%P|%(trailers:key=Agent,valueonly,separator=)|%(trailers:key=Feature,valueonly,separator=)' "$@" \
+    | awk -F'|' -v s="$cs" '
+      BEGIN { n = split(s, a, " "); for (i = 1; i <= n; i++) if (a[i] != "") F[a[i]] = 1 }
+      { h = $1; np = split($2, p, " "); nb[h] = np; ag = $3; fe = $4; gsub(/[ \t]/, "", ag); gsub(/[ \t]/, "", fe)
+        A[h] = ag; E[h] = fe; ord[++k] = h
+        for (j = 1; j <= np; j++) kids[p[j]] = kids[p[j]] " " h }
+      END { for (f in F) { q[++t] = f; vu[f] = 1 }
+            for (hd = 1; hd <= t; hd++) { m = split(kids[q[hd]], x, " ")
+              for (j = 1; j <= m; j++) if (!(x[j] in vu)) { vu[x[j]] = 1; q[++t] = x[j] } }
+            for (i = 1; i <= k; i++) { h = ord[i]; if (!(h in vu) || (h in F)) continue
+              if (nb[h] > 1) print "M " h
+              else if (A[h] != "dev" && (E[h] == "" || E[h] == "trivial")) print "C " h } }'
+}
 empreinte_feature() {
-  local fid="$1" c m r cs; shift
-  cs="$(commits_feature "$fid" "$@")"
+  local fid="$1" cs c genre r; shift
+  cs="$(commits_feature "$fid" "$@" | tr '\n' ' ')"
   {
     for c in $cs; do
       git show --format= "$c" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md' | git patch-id --stable | cut -d' ' -f1
     done
-    for m in $(git log --merges --format=%H "$@"); do
-      for c in $cs; do
-        git merge-base --is-ancestor "$c" "$m^1" 2>/dev/null || continue
-        r="$(git show --remerge-diff --format= "$m" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md')"
+    [ -z "$cs" ] || apres_feature "$cs" "$@" | while read -r genre c; do
+      if [ "$genre" = M ]; then
+        r="$(git show --remerge-diff --format= "$c" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md')"
         [ -z "$r" ] || printf 'fusion %s\n' "$(printf '%s\n' "$r" | git hash-object --stdin)"
-        break
-      done
+      else
+        git show --format= "$c" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md' | git patch-id --stable | cut -d' ' -f1
+      fi
     done
   } | sort | git hash-object --stdin | cut -c1-12
 }
 
 # spec_validee <spec> <rev> : la spec, à la révision <rev>, porte « Statut : validée » et le DERNIER commit
-# qui l'a modifiée est un commit du dev (validation ou revalidation, §6.0). Sinon : raison sur stdout, code 1.
+# qui en a changé le contenu est un commit du dev (validation ou revalidation, §6.0) ; un merge compte
+# seulement si sa résolution touche la spec. Sinon : raison sur stdout, code 1.
 spec_validee() {
-  local a
+  local a c
   git show "$2:$1" 2>/dev/null | grep -q '^Statut : validée' \
     || { echo "$1 n'est pas validée (ligne « Statut : validée » attendue, §6.0)"; return 1; }
-  a="$(git log -1 --format='x%(trailers:key=Agent,valueonly,separator=)' "$2" -- "$1" | tr -d ' ')"; a="${a#x}"
-  [ "$a" = dev ] || { echo "$1 modifiée en dernier par '${a:-?}' : elle doit être (re)validée par un commit 'Agent: dev' (§6.0)"; return 1; }
+  for c in $(git log --format=%H "$2" -- "$1"); do
+    if git rev-parse -q --verify "$c^2" >/dev/null && [ -z "$(git show --remerge-diff --format= "$c" -- "$1")" ]; then
+      continue                                                   # merge sans résolution sur la spec
+    fi
+    a="$(git log -1 --format='x%(trailers:key=Agent,valueonly,separator=)' "$c" | tr -d ' ')"; a="${a#x}"; break
+  done
+  [ "${a:-}" = dev ] || { echo "$1 modifiée en dernier par '${a:-?}' : elle doit être (re)validée par un commit 'Agent: dev' (§6.0)"; return 1; }
 }
 
 # a_du_contenu <F-id> <args git log>… : vrai si un commit de la feature touche autre chose que la

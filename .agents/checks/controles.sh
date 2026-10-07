@@ -11,7 +11,8 @@ conception=0; [ "${1:-}" = --conception ] && { conception=1; shift; }
 base="${1:?usage : controles.sh [--conception] <base> | --tout}"
 if [ "$base" = --tout ]; then plage=HEAD; base_deps="$(git hash-object -t tree /dev/null)"   # arbre vide
   plage_agents=HEAD; inst="$(git log --diff-filter=A --format=%H -- .agents/outils.env | tail -n 1)"
-  if [ -n "$inst" ] && git rev-parse --verify --quiet "$inst^" >/dev/null; then plage_agents="$inst^..HEAD"; fi
+  # l'installation et ses descendants seulement (un commit d'avant, fusionné après, n'a pas de trailers)
+  [ -z "$inst" ] || plage_agents="--no-walk $inst $(git rev-list --ancestry-path "$inst..HEAD" | tr '\n' ' ')"
 else
   git rev-parse --verify --quiet "$base^{commit}" >/dev/null \
     || echec "base introuvable : $base (en CI, récupérer l'historique complet : profondeur de clone illimitée)"
@@ -38,7 +39,8 @@ $({ git log --no-merges --format= --name-only "$plage"
    for m in $(git rev-list --merges "$plage"); do git show --remerge-diff --format= --name-only "$m"; done; } | sort -u)
 EOF2
 
-etape perimetre    "$C/perimetre.sh" --commits "$plage_agents"
+# shellcheck disable=SC2086  # liste de commits : découpage voulu
+etape perimetre    "$C/perimetre.sh" --commits $plage_agents
 etape secrets      "$C/secrets.sh" --plage "$plage"
 [ ${#modifies[@]} -gt 0 ] && etape format-lint "$C/format-lint.sh" "${modifies[@]}"
 for t in $(chaines); do
