@@ -537,3 +537,96 @@ class TestReformatStatusReportsConformance:
         _, status, *_ = self._run("Les feuilles tombent doucement dans le vent.", "gpt_5.1")
         assert "À vérifier" in status
         assert "exécutée" in status
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# F-033 — écoute limitée à la boucle locale par défaut
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class _FakeInterface:
+    """Remplace l'application Gradio : enregistre les arguments de `launch`."""
+
+    def __init__(self):
+        self.launch_kwargs = None
+
+    def launch(self, **kwargs):
+        self.launch_kwargs = kwargs
+
+
+class _RecordingHandler:
+    """Capte les enregistrements du logger de l'interface (propagate=False)."""
+
+    def __init__(self, logger_name):
+        import logging
+
+        self.records = []
+        self.logger = logging.getLogger(logger_name)
+        self.handler = logging.Handler(level=logging.DEBUG)
+        self.handler.emit = self.records.append
+
+    def __enter__(self):
+        self.logger.addHandler(self.handler)
+        return self
+
+    def __exit__(self, *exc):
+        self.logger.removeHandler(self.handler)
+
+    def warnings(self):
+        import logging
+
+        return [r.getMessage() for r in self.records if r.levelno == logging.WARNING]
+
+
+class TestWebListensOnLoopbackByDefault:
+    """F-033 : `launch_web()` n'expose l'interface au réseau que sur demande."""
+
+    def _launch(self, monkeypatch, **kwargs):
+        from promptforge.web import interface
+
+        fake = _FakeInterface()
+        monkeypatch.setattr(interface, "create_interface", lambda: fake)
+        with _RecordingHandler(interface.logger.name) as rec:
+            interface.launch_web(**kwargs)
+        return fake.launch_kwargs, rec.warnings()
+
+    # F-033-AC1
+    def test_f033_ac1_default_host_is_loopback(self, monkeypatch):
+        kwargs, warnings = self._launch(monkeypatch)
+        assert kwargs["server_name"] == "127.0.0.1"
+        assert warnings == []
+
+    # F-033-AC1
+    def test_f033_ac1_signature_default_is_loopback(self):
+        import inspect
+
+        from promptforge.web import interface
+
+        default = inspect.signature(interface.launch_web).parameters["host"].default
+        assert default == "127.0.0.1"
+
+    # F-033-AC4
+    @pytest.mark.parametrize(
+        "host", ["127.0.0.1", "127.0.1.1", "localhost", "LOCALHOST", "::1", "[::1]"]
+    )
+    def test_f033_ac4_loopback_hosts_do_not_warn(self, monkeypatch, host):
+        from promptforge.web import interface
+
+        assert interface.is_loopback_host(host)
+        kwargs, warnings = self._launch(monkeypatch, host=host)
+        assert kwargs["server_name"] == host
+        assert warnings == []
+
+    # F-033-AC4
+    @pytest.mark.parametrize("host", ["0.0.0.0", "::", "192.168.1.20", "promptforge.lan", ""])
+    def test_f033_ac4_network_host_logs_a_warning(self, monkeypatch, host):
+        from promptforge.web import interface
+
+        assert not interface.is_loopback_host(host)
+        kwargs, warnings = self._launch(monkeypatch, host=host, port=7861)
+        assert kwargs["server_name"] == host
+        assert len(warnings) == 1
+        message = warnings[0]
+        assert f"{host}:7861" in message
+        assert "réseau" in message
+        assert "sans authentification" in message

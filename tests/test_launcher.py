@@ -2561,3 +2561,61 @@ class TestLauncherRunsUnderTheSystemPython:
             "la recette naive passe desormais sous 3.9 ; verifier que "
             "`core_loader` reste correct avant de la simplifier"
         )
+
+
+# ======================================================================
+# F-033 : Ollama demarre par le lanceur n'ecoute que sur la boucle locale
+# ======================================================================
+
+
+class TestOllamaListensOnLoopbackByDefault:
+    """Sous Windows, le lanceur demarre `ollama serve` lui-meme."""
+
+    @pytest.fixture
+    def launcher(self):
+        return load_script_at(BASE_DIR / "launcher.py", "_f033_launcher")
+
+    # F-033-AC2
+    def test_f033_ac2_env_defaults_to_loopback(self, launcher):
+        env = launcher.ollama_env({"PATH": "C:\\Windows"})
+        assert env["OLLAMA_HOST"] == "127.0.0.1:11434"
+        assert env["PATH"] == "C:\\Windows"
+        assert "HSA_OVERRIDE_GFX_VERSION" not in env
+
+    # F-033-AC3
+    @pytest.mark.parametrize("valeur", ["0.0.0.0:11434", "192.168.1.5:11500", ""])
+    def test_f033_ac3_user_value_is_kept(self, launcher, valeur):
+        base = {"OLLAMA_HOST": valeur}
+        env = launcher.ollama_env(base, "10.3.0")
+        assert env["OLLAMA_HOST"] == valeur
+        assert env["HSA_OVERRIDE_GFX_VERSION"] == "10.3.0"
+        assert base == {"OLLAMA_HOST": valeur}, "l'environnement source ne doit pas changer"
+
+    def _start_on_windows(self, launcher, monkeypatch):
+        """Execute `start_ollama()` sous un Windows simule, sans lancer Ollama."""
+        appels = []
+        monkeypatch.setitem(launcher.state, "os", "Windows")
+        monkeypatch.setitem(launcher.state, "gfx_version", None)
+        monkeypatch.setattr(launcher.subprocess, "CREATE_NO_WINDOW", 0x08000000, raising=False)
+        monkeypatch.setattr(
+            launcher.subprocess, "Popen", lambda cmd, **kw: appels.append((cmd, kw))
+        )
+        monkeypatch.setattr(launcher.time, "sleep", lambda _s: None)
+        monkeypatch.setattr(launcher, "check_ollama", lambda: None)
+        launcher.start_ollama()
+        assert len(appels) == 1
+        cmd, kw = appels[0]
+        assert cmd == ["ollama", "serve"]
+        return kw["env"]
+
+    # F-033-AC2
+    def test_f033_ac2_start_ollama_on_windows_uses_loopback(self, launcher, monkeypatch):
+        monkeypatch.delenv("OLLAMA_HOST", raising=False)
+        env = self._start_on_windows(launcher, monkeypatch)
+        assert env["OLLAMA_HOST"] == "127.0.0.1:11434"
+
+    # F-033-AC3
+    def test_f033_ac3_start_ollama_on_windows_keeps_user_value(self, launcher, monkeypatch):
+        monkeypatch.setenv("OLLAMA_HOST", "0.0.0.0:11434")
+        env = self._start_on_windows(launcher, monkeypatch)
+        assert env["OLLAMA_HOST"] == "0.0.0.0:11434"
