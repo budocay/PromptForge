@@ -1112,15 +1112,26 @@ def clean_docker():
     check_docker_images()
 
 
+# F-033 : Ollama n'ecoute que sur la boucle locale, sauf choix explicite de
+# l'utilisateur (`OLLAMA_HOST` deja defini dans son environnement).
+OLLAMA_DEFAULT_HOST = f"127.0.0.1:{OLLAMA_PORT}"
+
+
+def ollama_env(base_env, gfx_version=None):
+    """Environnement de `ollama serve` : copie de `base_env`, jamais modifie."""
+    env = dict(base_env)
+    env.setdefault("OLLAMA_HOST", OLLAMA_DEFAULT_HOST)
+    if gfx_version:
+        env["HSA_OVERRIDE_GFX_VERSION"] = gfx_version
+    return env
+
+
 def start_ollama():
     """Démarre Ollama."""
     if state["os"] == "Windows":
         # Sur Windows, lancer Ollama nativement
         log("Demarrage d'Ollama...")
-        env = os.environ.copy()
-        env["OLLAMA_HOST"] = "0.0.0.0:11434"
-        if state["gfx_version"]:
-            env["HSA_OVERRIDE_GFX_VERSION"] = state["gfx_version"]
+        env = ollama_env(os.environ, state["gfx_version"])
 
         subprocess.Popen(
             ["ollama", "serve"],
