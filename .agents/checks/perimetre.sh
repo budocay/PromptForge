@@ -113,7 +113,7 @@ case "${1:-}" in
         echo "Commit $court : merge à plus de deux parents refusé (fusionner une branche à la fois)" >&2; rc=2; continue
       fi
       if git rev-parse -q --verify "$c^2" >/dev/null; then              # merge
-        res="$(git show --remerge-diff --format= --name-only "$c" 2>/dev/null)" || echec "git ≥ 2.39 requis (--remerge-diff)"
+        res="$(git show --remerge-diff --no-renames --format= --name-only "$c" 2>/dev/null)" || echec "git ≥ 2.39 requis (--remerge-diff)"
         [ -n "$res" ] || continue                                        # fusion automatique : rien d'ajouté
       fi
       # exactement un « Agent: » et au plus un « Feature: » : les scripts lisent un trailer, pas une liste
@@ -134,7 +134,7 @@ case "${1:-}" in
       while IFS= read -r f; do
         [ -n "$f" ] && signaler "$(statut "$agent" "$f")" "$f" "commit $court, $agent"
       done <<EOF
-$(if git rev-parse -q --verify "$c^2" >/dev/null; then printf '%s\n' "$res"; else git diff-tree --no-commit-id --name-only -r --root "$c"; fi)
+$(if git rev-parse -q --verify "$c^2" >/dev/null; then printf '%s\n' "$res"; else git diff-tree --no-commit-id --no-renames --name-only -r --root "$c"; fi)
 EOF
     done ;;
   --couverture)        # à la génération : un grep par liste, puis le décompte par fichier

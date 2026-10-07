@@ -4,8 +4,10 @@
 # Chemins non ASCII en clair dans toutes les sorties git du socle (sinon « src/\303\251t\303\251.py »).
 # Avant tout appel à git : un GIT_CONFIG_COUNT hérité invalide ferait échouer git lui-même.
 case "${GIT_CONFIG_COUNT:-0}" in *[!0-9]*|'') n_cfg=0 ;; *) n_cfg=$((10#${GIT_CONFIG_COUNT:-0})) ;; esac
+# Et jamais de détection de renommage : un fichier protégé « renommé » doit apparaître comme supprimé.
 export "GIT_CONFIG_KEY_$n_cfg=core.quotePath" "GIT_CONFIG_VALUE_$n_cfg=false"
-export GIT_CONFIG_COUNT=$((n_cfg + 1))
+export "GIT_CONFIG_KEY_$((n_cfg + 1))=diff.renames" "GIT_CONFIG_VALUE_$((n_cfg + 1))=false"
+export GIT_CONFIG_COUNT=$((n_cfg + 2))
 RACINE="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "FAIL : pas un dépôt git" >&2; exit 2; }
 cd "$RACINE" || exit 2
 # La configuration vient UNIQUEMENT de .agents/outils.env (protégé) : on efface d'abord toute variable du
@@ -97,7 +99,7 @@ fichiers_de() { # fichiers_de <commit> : fichiers changés (merge : ceux que sa 
 }
 # Diff au texte fixe, quelle que soit la configuration git du poste (préfixes, contexte, algorithme,
 # abréviations, style de conflit, pilotes externes) : la même empreinte en local et en CI.
-DIFF_FIXE=(-c diff.noprefix=false -c diff.mnemonicPrefix=false -c diff.context=3 -c diff.algorithm=myers
+DIFF_FIXE=(-c core.attributesFile=/dev/null -c diff.orderFile=/dev/null -c diff.noprefix=false -c diff.mnemonicPrefix=false -c diff.context=3 -c diff.algorithm=myers
            -c diff.indentHeuristic=true -c diff.suppressBlankEmpty=false -c diff.renames=false
            -c merge.conflictStyle=merge -c core.abbrev=40)
 contenu_de() { # contenu_de <commit> : diff hors traçabilité (merge : ce que sa résolution ajoute à la fusion automatique)
@@ -110,12 +112,14 @@ EOF
   git "${DIFF_FIXE[@]}" show "$@" --format= --no-ext-diff --no-textconv --no-renames --text --full-index \
     --src-prefix=a/ --dst-prefix=b/ -U3 -- "${l[@]}"
 }
-empreinte_de() { # empreinte_de <commit> : patch-id blancs compris (stable par rebase) ; merge : condensé de sa résolution
-  local r
+empreinte_de() { # empreinte_de <commit> : patch-id blancs compris (stable par rebase), plus la fonction englobante
+  local r                # de chaque bloc (patch-id ignore les lignes « @@ ») ; merge : condensé de sa résolution
+  r="$(contenu_de "$1")"; [ -n "$r" ] || return 0
   if git rev-parse -q --verify "$1^2" >/dev/null; then
-    r="$(contenu_de "$1")"; [ -z "$r" ] || printf 'fusion %s\n' "$(printf '%s\n' "$r" | git hash-object --stdin)"
+    printf 'fusion %s\n' "$(printf '%s\n' "$r" | git hash-object --stdin)"
   else
-    contenu_de "$1" | git patch-id --verbatim | cut -d' ' -f1
+    printf '%s %s\n' "$(printf '%s\n' "$r" | git patch-id --verbatim | cut -d' ' -f1)" \
+      "$(printf '%s\n' "$r" | grep -E '^(@@|diff --git )' | sed 's/^@@[^@]*@@//' | git hash-object --stdin | cut -c1-12)"
   fi
 }
 apres_feature() { # apres_feature "<commits F>" <args git log>… : « M <merge> » / « C <commit> » à compter en plus

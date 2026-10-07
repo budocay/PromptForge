@@ -35,8 +35,8 @@ etape() { # etape <nom> <commande…>
 
 modifies=()
 while IFS= read -r f; do [ -n "$f" ] && [ -f "$f" ] && modifies+=("$f"); done <<EOF2
-$({ git log --no-merges --format= --name-only "$plage"
-   for m in $(git rev-list --merges "$plage"); do git show --remerge-diff --format= --name-only "$m"; done; } | sort -u)
+$({ git log --no-merges --no-renames --format= --name-only "$plage"
+   for m in $(git rev-list --merges "$plage"); do git show --remerge-diff --no-renames --format= --name-only "$m"; done; } | sort -u)
 EOF2
 
 # shellcheck disable=SC2086  # liste de commits : découpage voulu

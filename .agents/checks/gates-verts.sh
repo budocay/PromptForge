@@ -71,7 +71,7 @@ git log --format='%H|%h|%(trailers:key=Agent,valueonly,separator=)|%(trailers:ke
   | while IFS='|' read -r h hc ag fe; do
       ag="${ag// /}"; fe="${fe// /}"
       { [ "$fe" = trivial ] && [ "$ag" != dev ]; } || continue
-      f="$(contenu_de "$h" | sed -n 's%^diff --git a/\([^ ]*\) .*%\1%p' | head -n 3 | tr '\n' ' ')"
+      f="$(fichiers_de "$h" | grep -vE "$TRACE_RE" | head -n 3 | tr '\n' ' ')"
       [ -z "$f" ] || echo "TRIVIAL (sans gate, tier à confirmer par le dev à la relecture) : $hc $ag : $f"
     done
 [ $rc -eq 0 ] && echo "RESULTAT GATES: OK"
