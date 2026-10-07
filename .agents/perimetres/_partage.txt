@@ -1,0 +1,8 @@
+# Partagés : autorisés, signalés, approuvés par CODEOWNERS au merge (§2.3)
+# pyproject.toml porte aussi la config de ruff, black et pytest : toute retouche est relue par le dev.
+pyproject.toml
+README.md
+CONTRIBUTING.md
+docs/SOURCES_METHODOLOGY.md
+tests/conftest.py
+tests/__init__.py

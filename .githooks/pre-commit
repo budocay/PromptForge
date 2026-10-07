@@ -1,0 +1,4 @@
+#!/bin/bash
+# Formatage, lint et secrets sur le contenu indexé.
+C="$(git rev-parse --show-toplevel)/.agents/checks"
+"$C/format-lint.sh" --index && "$C/secrets.sh" --index

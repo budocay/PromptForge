@@ -75,3 +75,7 @@ design-system/*/pages/
 # sont suivis. Regle jumelle de `data/projects/*` (D-008).
 projects/*
 !projects/exemple-*.md
+
+# AGENT_FACTORY : état local et dossiers de revue du socle
+.agents/.state/
+.agents/review/

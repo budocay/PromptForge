@@ -1,0 +1,9 @@
+docker/**
+compose.yaml
+Makefile
+.env.example
+scripts/build.py
+scripts/docker_helper.py
+scripts/setup-amd-windows.ps1
+docs/DOCKER_GUIDE.md
+tests/test_compose.py

@@ -1,0 +1,14 @@
+# Protégés : « Agent: dev » uniquement — règles, contrôles, configuration (§0.2, §2.3, §3.9)
+AGENTS.md
+CLAUDE.md
+CODEOWNERS
+.gitignore
+LICENSE
+.agents/**
+.githooks/**
+.github/**
+.claude/**
+.gitleaks.toml
+.gitleaksignore
+.bandit-baseline.json
+.importlinter

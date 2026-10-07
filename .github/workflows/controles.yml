@@ -1,0 +1,43 @@
+# .github/workflows/controles.yml — un seul appel au socle (§4.2). Fichier protégé.
+name: controles
+on:
+  pull_request:
+  push:
+    branches: [main]                # = BRANCHE_PRINCIPALE de .agents/outils.env
+jobs:
+  controles:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # historique complet : sinon controles.sh échoue fermé
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Outillage (.venv du dépôt, comme en local, et gitleaks vérifié par somme de contrôle)
+        env:
+          GITLEAKS: "8.28.0"
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q --upgrade pip      # le pip fourni avec le venv peut avoir des CVE (SCA)
+          .venv/bin/pip install -q -e ".[all]" "ruff==0.15.8" "black==26.3.1" bandit pip-audit
+          base="https://github.com/gitleaks/gitleaks/releases/download/v$GITLEAKS"
+          curl -sSfLO "$base/gitleaks_${GITLEAKS}_linux_x64.tar.gz"
+          curl -sSfLO "$base/gitleaks_${GITLEAKS}_checksums.txt"
+          sha256sum --ignore-missing -c "gitleaks_${GITLEAKS}_checksums.txt"
+          tar -xzf "gitleaks_${GITLEAKS}_linux_x64.tar.gz" gitleaks && sudo mv gitleaks /usr/local/bin/
+          rm -f gitleaks_*
+      - name: Contrôles et gates du socle
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          AVANT: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then base="origin/$BASE_REF"; plage="$base..HEAD"
+          elif [ "$AVANT" = 0000000000000000000000000000000000000000 ]; then base=--tout; plage=HEAD   # premier push
+          else base="$AVANT"; plage="$base..HEAD"; fi
+          set -o pipefail
+          # Chaque contrôle en échec devient une annotation visible dans la PR (sortie brute comprise).
+          annoter() { awk '/^CONTROLE .*: (FAIL|UNVERIFIED)/{if(b)print b; b=$0; next} /^CONTROLE |^RESULTAT/{if(b)print b; b=""; next} b{b=b"%0A"$0} END{if(b)print b}' | sed 's/^/::error title=controles::/'; }
+          .agents/checks/controles.sh "$base" | tee checks.txt || { annoter < checks.txt; exit 2; }
+          .agents/checks/gates-verts.sh "$plage" 2>&1 | tee gates.txt || { sed 's/^/::error title=gates::/' gates.txt; exit 2; }

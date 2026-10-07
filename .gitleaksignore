@@ -1,0 +1,14 @@
+# Faux positifs de l'historique : jeux d'essai du détecteur de secrets de PromptForge
+# (tests/test_security.py, motifs de promptforge/security.py), clés factices ou d'exemple AWS.
+# Relus le 2026-10-07 (génération AGENT_FACTORY). Fichier protégé : tout ajout est une décision du dev.
+a5991ae0bb48b7026e60a2188f425ee0aea426ba:promptforge/security.py:private-key:297
+a5991ae0bb48b7026e60a2188f425ee0aea426ba:tests/test_security.py:generic-api-key:722
+22ec322f1b66e9d00ed84b5714f33993da64ba14:tests/test_security.py:generic-api-key:454
+0b2a7e28e15c4eaba7109279ad7070cf94aa5620:tests/test_security.py:generic-api-key:454
+0b2a7e28e15c4eaba7109279ad7070cf94aa5620:tests/test_security.py:generic-api-key:461
+7d589cdb71a9b2c01151a1ac5cef28ca116cf65f:promptforge/security.py:private-key:168
+7d589cdb71a9b2c01151a1ac5cef28ca116cf65f:tests/test_security.py:jwt:706
+7d589cdb71a9b2c01151a1ac5cef28ca116cf65f:tests/test_security.py:generic-api-key:538
+7d589cdb71a9b2c01151a1ac5cef28ca116cf65f:tests/test_security.py:generic-api-key:558
+7d589cdb71a9b2c01151a1ac5cef28ca116cf65f:tests/test_security.py:generic-api-key:574
+7d589cdb71a9b2c01151a1ac5cef28ca116cf65f:tests/test_security.py:private-key:721

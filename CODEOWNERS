@@ -1,0 +1,22 @@
+# généré par .agents/checks/sync-agents.sh : ne pas éditer — depuis .agents/perimetres/_protege.txt et _partage.txt
+/AGENTS.md @budocay
+/CLAUDE.md @budocay
+/CODEOWNERS @budocay
+/.gitignore @budocay
+/LICENSE @budocay
+/.agents/** @budocay
+/.githooks/** @budocay
+/.github/** @budocay
+/.claude/** @budocay
+/.gitleaks.toml @budocay
+/.gitleaksignore @budocay
+/.bandit-baseline.json @budocay
+/.importlinter @budocay
+/pyproject.toml @budocay
+/README.md @budocay
+/CONTRIBUTING.md @budocay
+/docs/SOURCES_METHODOLOGY.md @budocay
+/tests/conftest.py @budocay
+/tests/__init__.py @budocay
+/specs/ @budocay
+/MEMORY/gates.log @budocay
