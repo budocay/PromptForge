@@ -1,0 +1,62 @@
+# Fiche projet (§1.5) — déduite du dépôt le 2026-10-07, validée par le dev (criticité, harness, livraison).
+projet:
+  nom: "PromptForge"
+  domaine_metier: "outillage IA : reformatage de prompts"
+  description_courte: "Réécrit un prompt court en prompt structuré (XML ou Markdown) avec le contexte du projet, 100 % local via Ollama"
+  utilisateurs_cibles: "personnes qui écrivent beaucoup de prompts : dev, SEO, marketing, data, produit, support"
+  fonctionnalites_cles: [reformatage par profil de LLM cible, projets et templates métier, scanner de projet et CVE (OSV.dev), interface web Gradio, CLI, lanceur avec mesure machine, Docker CPU/NVIDIA/AMD]
+  type_projet: [cli, web-app]
+  criticite: "prod"
+  langue: "fr"
+
+env_execution:
+  shell: true
+  web: true
+  fs: true
+  ci: "github"
+  branche_protegee: true
+  harness: [claude-code]
+
+stack:
+  langages: [python]
+  backend: "Python ≥ 3.10, bibliothèque standard (cœur, providers Ollama, scanner, SQLite)"
+  api_style: ""
+  frontend: "Gradio ≥ 4 + lanceur HTML local (launcher.py, assets/)"
+  backoffice: ""
+  mobile: ""
+  base_de_donnees: "SQLite (un module : promptforge/database.py)"
+  orm: ""
+  packaging: "setuptools (pyproject.toml), script promptforge"
+  infra: [docker, compose]
+  ci_cd: "GitHub Actions"
+  cloud_messaging: ""
+  outillage_qualite:
+    formateur: "black 26.3.1"
+    linter: "ruff 0.15.8"
+    test_runner: "pytest"
+    complexite: ""
+    sast: "bandit (base de référence .bandit-baseline.json)"
+    sca: "pip-audit"
+    secrets: "gitleaks"
+    contrats_dependances: ""        # D-070 : import-linter à proposer
+    mutation: ""
+    conteneurs: ""
+
+contraintes:
+  reglementaire: []                 # aucune donnée envoyée hors de la machine
+  performance: ["modèles locaux de 3 à 11 Gio de mémoire ; délai Ollama réglable (OLLAMA_TIMEOUT)"]
+  conventions_code: "black 100 colonnes, ruff (E, F, W, I, N, UP), messages de commit en français"
+  architecture_cible: "cœur pur sans interface ; interface web et lanceur consommateurs du cœur ; scanner en paquet"
+  budget: ""
+  partage_externe_autorise: false
+
+equipe:
+  destinataires: "développeurs"
+  niveau: "senior"
+
+modeles:
+  defaut: ""
+  architecte: "opus"
+  reviewers: "sonnet"
+  veille: ""
+  gate_critique: ""

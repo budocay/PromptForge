@@ -1,0 +1,2 @@
+# Conversation principale du harness (« orchestrateur ») : délègue, n'écrit pas de code (§3.0).
+# Vide = traçabilité seulement (_commun.txt). Élargir ici si le dev l'autorise (fichier protégé).

@@ -1,0 +1,10 @@
+promptforge/web/**
+launcher.py
+start.py
+assets/**
+design-system/**
+scripts/generate_icons.py
+tests/test_web_interface.py
+tests/test_onboarding.py
+tests/test_launcher.py
+tests/test_game_changer.py

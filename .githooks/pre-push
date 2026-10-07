@@ -1,0 +1,21 @@
+#!/bin/bash
+# Contrôle ce qui est poussé, pas l'arbre de travail : périmètre et secrets sur chaque commit poussé,
+# tests sur le commit exact ; vers la branche principale, gates verts pour chaque feature poussée.
+C="$(git rev-parse --show-toplevel)/.agents/checks"
+zero=0000000000000000000000000000000000000000
+while read -r _ local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue                          # suppression de branche
+  if [ "$remote_sha" = "$zero" ]; then plage="$local_sha --not --remotes"
+  else
+    git cat-file -e "$remote_sha^{commit}" 2>/dev/null || { echo "FAIL : $remote_sha inconnu localement (git fetch)" >&2; exit 2; }
+    plage="$remote_sha..$local_sha"
+  fi
+  # shellcheck disable=SC2086  # $plage est volontairement découpée en arguments git
+  "$C/perimetre.sh" --commits $plage </dev/null           || exit 2
+  # shellcheck disable=SC2086
+  "$C/secrets.sh" --plage $plage </dev/null               || exit 2
+  "$C/verifier.sh" --cle push --ref "$local_sha" </dev/null || exit 2
+  # shellcheck disable=SC2086
+  "$C/gates-verts.sh" --si-principale "$remote_ref" $plage </dev/null || exit 2
+done
+exit 0

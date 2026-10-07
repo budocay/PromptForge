@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(**/.env)", "Edit(**/.env)",
+      "Read(**/secrets/**)", "Edit(**/secrets/**)",
+      "Agent(fork)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [{ "matcher": "startup|resume|clear|compact",
+      "hooks": [{ "type": "command", "command": "cat \"${CLAUDE_PROJECT_DIR}/MEMORY/STATE.md\"" }] }],
+    "PreToolUse": [{ "matcher": "Edit|Write|NotebookEdit",
+      "hooks": [{ "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/cc-adapt.sh", "args": ["perimetre"] }] }],
+    "PostToolUse": [{ "matcher": "Edit|Write",
+      "hooks": [{ "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/cc-adapt.sh", "args": ["format-lint"] }] }],
+    "Stop": [{
+      "hooks": [{ "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/cc-adapt.sh", "args": ["verifier"] }] }],
+    "SubagentStart": [{ "matcher": "agent-securite|agent-architecte|reviewer-backend|reviewer-frontend|reviewer-devops",
+      "hooks": [{ "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/cc-adapt.sh", "args": ["gate-debut"] }] }],
+    "SubagentStop": [
+      { "matcher": "agent-backend|agent-frontend|agent-devops|agent-planif|agent-veille|agent-architecte-conception",
+        "hooks": [{ "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/cc-adapt.sh", "args": ["verifier"] }] },
+      { "matcher": "agent-securite|agent-architecte|reviewer-backend|reviewer-frontend|reviewer-devops",
+        "hooks": [{ "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/cc-adapt.sh", "args": ["gate-fin"] }] }
+    ]
+  }
+}
