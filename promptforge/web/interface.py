@@ -13,6 +13,7 @@ Interface principale:
 - ❓ Aide
 """
 
+import ipaddress
 from pathlib import Path
 
 import gradio as gr
@@ -1233,12 +1234,32 @@ ollama pull qwen3:8b
     return interface
 
 
-def launch_web(host: str = "0.0.0.0", port: int = 7860, share: bool = False, base_path: str = None):
-    """Lance l'interface web."""
+def is_loopback_host(host: str) -> bool:
+    """Vrai si `host` n'est joignable que depuis la machine (boucle locale)."""
+    if not host:
+        return False
+    name = host.strip().strip("[]").lower()
+    if name == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(name).is_loopback
+    except ValueError:
+        return False
+
+
+def launch_web(
+    host: str = "127.0.0.1", port: int = 7860, share: bool = False, base_path: str = None
+):
+    """Lance l'interface web (boucle locale par défaut, F-033)."""
     if base_path:
         set_base_path(base_path)
 
     logger.info(f"Launching interface v4 on {host}:{port}")
+    if not is_loopback_host(host):
+        logger.warning(
+            f"Interface web joignable depuis le réseau sur {host}:{port}, "
+            "sans authentification : toute machine du réseau peut lire et envoyer des prompts."
+        )
 
     interface = create_interface()
 

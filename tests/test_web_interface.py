@@ -537,3 +537,215 @@ class TestReformatStatusReportsConformance:
         _, status, *_ = self._run("Les feuilles tombent doucement dans le vent.", "gpt_5.1")
         assert "À vérifier" in status
         assert "exécutée" in status
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# F-033 — écoute limitée à la boucle locale par défaut
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class _FakeInterface:
+    """Remplace l'application Gradio : enregistre les arguments de `launch`."""
+
+    def __init__(self):
+        self.launch_kwargs = None
+
+    def launch(self, **kwargs):
+        self.launch_kwargs = kwargs
+
+
+class _RecordingHandler:
+    """Capte les enregistrements du logger de l'interface (propagate=False)."""
+
+    def __init__(self, logger_name):
+        import logging
+
+        self.records = []
+        self.logger = logging.getLogger(logger_name)
+        self.handler = logging.Handler(level=logging.DEBUG)
+        self.handler.emit = self.records.append
+
+    def __enter__(self):
+        self.logger.addHandler(self.handler)
+        return self
+
+    def __exit__(self, *exc):
+        self.logger.removeHandler(self.handler)
+
+    def warnings(self):
+        import logging
+
+        return [r.getMessage() for r in self.records if r.levelno == logging.WARNING]
+
+
+class TestWebListensOnLoopbackByDefault:
+    """F-033 : `launch_web()` n'expose l'interface au réseau que sur demande."""
+
+    def _launch(self, monkeypatch, **kwargs):
+        from promptforge.web import interface
+
+        fake = _FakeInterface()
+        monkeypatch.setattr(interface, "create_interface", lambda: fake)
+        with _RecordingHandler(interface.logger.name) as rec:
+            interface.launch_web(**kwargs)
+        return fake.launch_kwargs, rec.warnings()
+
+    # F-033-AC1
+    def test_f033_ac1_default_host_is_loopback(self, monkeypatch):
+        kwargs, warnings = self._launch(monkeypatch)
+        assert kwargs["server_name"] == "127.0.0.1"
+        assert warnings == []
+
+    # F-033-AC1
+    def test_f033_ac1_signature_default_is_loopback(self):
+        import inspect
+
+        from promptforge.web import interface
+
+        default = inspect.signature(interface.launch_web).parameters["host"].default
+        assert default == "127.0.0.1"
+
+    # F-033-AC4
+    @pytest.mark.parametrize(
+        "host", ["127.0.0.1", "127.0.1.1", "localhost", "LOCALHOST", "::1", "[::1]"]
+    )
+    def test_f033_ac4_loopback_hosts_do_not_warn(self, monkeypatch, host):
+        from promptforge.web import interface
+
+        assert interface.is_loopback_host(host)
+        kwargs, warnings = self._launch(monkeypatch, host=host)
+        assert kwargs["server_name"] == host
+        assert warnings == []
+
+    # F-033-AC4
+    @pytest.mark.parametrize("host", ["0.0.0.0", "::", "192.168.1.20", "promptforge.lan", ""])
+    def test_f033_ac4_network_host_logs_a_warning(self, monkeypatch, host):
+        from promptforge.web import interface
+
+        assert not interface.is_loopback_host(host)
+        kwargs, warnings = self._launch(monkeypatch, host=host, port=7861)
+        assert kwargs["server_name"] == host
+        assert len(warnings) == 1
+        message = warnings[0]
+        assert f"{host}:7861" in message
+        assert "réseau" in message
+        assert "sans authentification" in message
+
+
+class TestNetworkEntryPointsPassTheHostExplicitly:
+    """Couture F-033 : le nouveau défaut ne doit casser aucun point d'entrée.
+
+    Passer le défaut de `launch_web()` de `0.0.0.0` à `127.0.0.1` est sûr tant
+    que chaque appelant qui doit écouter sur le réseau le demande lui-même.
+    Ces tests lisent les fichiers du dépôt : un appelant qui reposerait sur
+    l'ancien défaut, ou un conteneur qui perdrait son `--host 0.0.0.0`, les
+    fait rougir.
+    """
+
+    REPO = Path(__file__).resolve().parent.parent
+    EXCLUDED_DIRS = {".venv", ".git", "tests", "node_modules", "build", "dist", ".agents"}
+    # Appelant exempté, nommé : `python -m promptforge.web.interface` écoute
+    # désormais sur la boucle locale, c'est voulu par F-033.
+    MAIN_EXEMPTION = Path("promptforge/web/interface.py")
+
+    @staticmethod
+    def _is_main_guard(node):
+        import ast
+
+        test = getattr(node, "test", None)
+        return (
+            isinstance(node, ast.If)
+            and isinstance(test, ast.Compare)
+            and isinstance(test.left, ast.Name)
+            and test.left.id == "__name__"
+            and any(isinstance(c, ast.Constant) and c.value == "__main__" for c in test.comparators)
+        )
+
+    def _launch_web_calls(self):
+        """(chemin relatif, ligne, passe host=, sous `if __name__ == "__main__"`)."""
+        import ast
+
+        calls = []
+        for path in sorted(self.REPO.rglob("*.py")):
+            rel = path.relative_to(self.REPO)
+            if self.EXCLUDED_DIRS & set(rel.parts[:-1]):
+                continue
+            source = path.read_text(encoding="utf-8", errors="replace")
+            if "launch_web(" not in source:
+                continue
+            tree = ast.parse(source, filename=str(rel))
+            main_calls = set()
+            for node in ast.walk(tree):
+                if self._is_main_guard(node):
+                    main_calls.update(id(n) for n in ast.walk(node))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                name = getattr(func, "id", None) or getattr(func, "attr", None)
+                if name != "launch_web":
+                    continue
+                has_host = any(kw.arg == "host" for kw in node.keywords) or bool(node.args)
+                calls.append((rel, node.lineno, has_host, id(node) in main_calls))
+        return calls
+
+    # F-033-AC1
+    def test_f033_ac1_every_caller_passes_host_explicitly(self):
+        calls = self._launch_web_calls()
+        callers = {rel for rel, *_ in calls}
+        # Garde-fou contre un test vide : les appelants connus doivent être vus.
+        assert Path("promptforge/cli.py") in callers, "promptforge/cli.py n'appelle plus launch_web"
+        assert Path("start.py") in callers, "start.py n'appelle plus launch_web"
+
+        implicit = [
+            f"{rel}:{line}"
+            for rel, line, has_host, in_main in calls
+            if not has_host and not (rel == self.MAIN_EXEMPTION and in_main)
+        ]
+        assert implicit == [], (
+            "appel(s) de launch_web() sans host= explicite : "
+            f"{', '.join(implicit)}. Depuis F-033 le défaut est 127.0.0.1 ; un appelant "
+            "qui comptait sur l'ancien défaut 0.0.0.0 n'est plus joignable depuis le réseau."
+        )
+
+    # F-033-AC1
+    def test_f033_ac1_docker_web_image_listens_on_all_interfaces(self):
+        import json
+
+        dockerfile = self.REPO / "docker" / "Dockerfile.web"
+        entrypoints = [
+            line.strip()[len("ENTRYPOINT") :].strip()
+            for line in dockerfile.read_text(encoding="utf-8").splitlines()
+            if line.strip().startswith("ENTRYPOINT")
+        ]
+        assert entrypoints, f"{dockerfile.relative_to(self.REPO)} n'a plus d'ENTRYPOINT"
+        argv = json.loads(entrypoints[-1])
+        assert "--host" in argv and argv.index("--host") + 1 < len(argv), (
+            "l'ENTRYPOINT de docker/Dockerfile.web ne passe plus --host : le conteneur "
+            "écouterait sur 127.0.0.1, la redirection de port n'atteindrait rien"
+        )
+        assert argv[argv.index("--host") + 1] == "0.0.0.0", (
+            "l'ENTRYPOINT de docker/Dockerfile.web ne passe plus --host 0.0.0.0 : le "
+            "conteneur écouterait sur la boucle locale, la redirection de port n'atteindrait rien"
+        )
+
+    # F-033-AC1
+    def test_f033_ac1_make_web_public_opts_in_to_the_network(self):
+        import shlex
+
+        lines = (self.REPO / "Makefile").read_text(encoding="utf-8").splitlines()
+        starts = [i for i, line in enumerate(lines) if line.startswith("web-public:")]
+        assert starts, "la cible web-public a disparu du Makefile"
+        recipe = []
+        for line in lines[starts[0] + 1 :]:
+            if not line.startswith("\t"):
+                break
+            recipe.extend(shlex.split(line.strip()))
+        assert "--host" in recipe and recipe.index("--host") + 1 < len(recipe), (
+            "make web-public ne passe plus --host : l'interface n'écouterait que sur "
+            "127.0.0.1, la cible ne serait plus « publique »"
+        )
+        assert recipe[recipe.index("--host") + 1] == "0.0.0.0", (
+            "make web-public ne passe plus --host 0.0.0.0 : la cible, choix explicite "
+            "d'ouverture au réseau (hors périmètre F-033), ne l'ouvrirait plus"
+        )
