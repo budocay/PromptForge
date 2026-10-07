@@ -9,11 +9,9 @@
 mode=""; [ "${1:-}" = --conception ] && { mode=--conception; shift; }
 fid="${1:?usage : dossier-revue.sh [--conception] <F-id>}"; spec="specs/$fid.md"
 [ -f "$spec" ] || echec "spec absente : $spec"
-grep -q '^Statut : validée' "$spec" || echec "$spec n'est pas validée (ligne « Statut : validée » attendue, §6.0)"
 # La spec est un contrat : le DERNIER commit qui la modifie doit être un commit du dev (validation ou
 # revalidation). Une spec retouchée après validation, par qui que ce soit d'autre, est refusée.
-auteur="$(git log -1 --format='x%(trailers:key=Agent,valueonly,separator=)' -- "$spec" | tr -d ' ')"; auteur="${auteur#x}"
-[ "$auteur" = dev ] || echec "$spec modifiée en dernier par '${auteur:-?}' : elle doit être (re)validée par un commit 'Agent: dev' (§6.0)"
+raison="$(spec_validee "$spec" HEAD)" || echec "$raison"
 [ -z "$(git status --porcelain -- . ':!MEMORY/gates.log')" ] || echec "arbre non commité : commite (trailers Agent:/Feature:) avant la revue"
 B="${BRANCHE_PRINCIPALE:?BRANCHE_PRINCIPALE absent de outils.env}"
 if git rev-parse --verify --quiet "origin/$B^{commit}" >/dev/null; then cible="origin/$B"

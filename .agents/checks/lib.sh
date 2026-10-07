@@ -1,6 +1,11 @@
 # shellcheck shell=bash
 # .agents/checks/lib.sh — sourcé par les scripts du socle. bash >= 3.2, aucune dépendance au harness.
 # Codes de sortie du socle : 0 OK · 2 FAIL (bloquant) · 3 ESCALADE (§5.6) · 4 UNVERIFIED (bloquant, outil absent)
+# Chemins non ASCII en clair dans toutes les sorties git du socle (sinon « src/\303\251t\303\251.py »).
+# Avant tout appel à git : un GIT_CONFIG_COUNT hérité invalide ferait échouer git lui-même.
+case "${GIT_CONFIG_COUNT:-0}" in *[!0-9]*|'') n_cfg=0 ;; *) n_cfg=$((10#${GIT_CONFIG_COUNT:-0})) ;; esac
+export "GIT_CONFIG_KEY_$n_cfg=core.quotePath" "GIT_CONFIG_VALUE_$n_cfg=false"
+export GIT_CONFIG_COUNT=$((n_cfg + 1))
 RACINE="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "FAIL : pas un dépôt git" >&2; exit 2; }
 cd "$RACINE" || exit 2
 # La configuration vient UNIQUEMENT de .agents/outils.env (protégé) : on efface d'abord toute variable du
@@ -9,12 +14,13 @@ for v in $(compgen -v); do
   case "$v" in
     *_CMD|*_EXT|*_REQUIERT|*_RACINE|HARNESS|TOOLCHAINS|TESTS_GLOB|DEPS_AGE_MIN_JOURS|DEPS_APPROUVEES|CONTROLES_SUPPL|\
     CONTROLES_SECURITE|GATE_CRITIQUE_AGENTS|GATES_STANDARD|GATES_STRUCTUREL|PARTAGE_EXTERNE_AUTORISE|ACCEPTE_UNVERIFIED|\
-    ACCEPTE_UNVERIFIED_LOCAL|CRITICITE|BRANCHE_PRINCIPALE|FORMAT_LINT_EXCLUDE|CODEOWNER|BASE) unset "$v" 2>/dev/null ;;
+    ACCEPTE_UNVERIFIED_LOCAL|CRITICITE|BRANCHE_PRINCIPALE|FORMAT_LINT_EXCLUDE|CODEOWNER|PYTHON_SOCLE|BASE) unset "$v" 2>/dev/null ;;
   esac
 done
 [ -f .agents/outils.env ] || { echo "FAIL : .agents/outils.env absent" >&2; exit 2; }
 # shellcheck source=/dev/null
 set -a; . ./.agents/outils.env; set +a
+
 
 echec()       { echo "FAIL : $*" >&2; exit 2; }
 non_verifie() { echo "UNVERIFIED : $*" >&2; exit 4; }
@@ -59,17 +65,40 @@ accepte() {
 }
 
 # empreinte_feature <F-id> <args git log>… : empreinte du contenu des commits « Feature: <F-id> » (hors
-# traçabilité : MEMORY/, PROJECT_LOG.md, ROADMAP.md), stable par rebase. Un verdict vaut pour ce contenu-là.
+# traçabilité : MEMORY/, PROJECT_LOG.md, ROADMAP.md), stable par rebase, PLUS la résolution de chaque merge
+# de la plage fait SUR la feature (premier parent qui contient déjà un de ses commits) : du code ajouté en
+# résolvant un conflit change l'empreinte. Un verdict vaut pour ce contenu-là.
 commits_feature() { # commits_feature <F-id> <args git log>… : commits « Feature: <F-id> » (hors merges)
   local fid="$1"; shift
   git log --no-merges --format='%H %(trailers:key=Feature,valueonly,separator=)' "$@" \
     | awk -v f="$fid" '{gsub(/ /,"",$2)} $2==f {print $1}'
 }
 empreinte_feature() {
-  local fid="$1" c; shift
-  for c in $(commits_feature "$fid" "$@"); do
-    git show --format= "$c" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md' | git patch-id --stable | cut -d' ' -f1
-  done | sort | git hash-object --stdin | cut -c1-12
+  local fid="$1" c m r cs; shift
+  cs="$(commits_feature "$fid" "$@")"
+  {
+    for c in $cs; do
+      git show --format= "$c" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md' | git patch-id --stable | cut -d' ' -f1
+    done
+    for m in $(git log --merges --format=%H "$@"); do
+      for c in $cs; do
+        git merge-base --is-ancestor "$c" "$m^1" 2>/dev/null || continue
+        r="$(git show --remerge-diff --format= "$m" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md')"
+        [ -z "$r" ] || printf 'fusion %s\n' "$(printf '%s\n' "$r" | git hash-object --stdin)"
+        break
+      done
+    done
+  } | sort | git hash-object --stdin | cut -c1-12
+}
+
+# spec_validee <spec> <rev> : la spec, à la révision <rev>, porte « Statut : validée » et le DERNIER commit
+# qui l'a modifiée est un commit du dev (validation ou revalidation, §6.0). Sinon : raison sur stdout, code 1.
+spec_validee() {
+  local a
+  git show "$2:$1" 2>/dev/null | grep -q '^Statut : validée' \
+    || { echo "$1 n'est pas validée (ligne « Statut : validée » attendue, §6.0)"; return 1; }
+  a="$(git log -1 --format='x%(trailers:key=Agent,valueonly,separator=)' "$2" -- "$1" | tr -d ' ')"; a="${a#x}"
+  [ "$a" = dev ] || { echo "$1 modifiée en dernier par '${a:-?}' : elle doit être (re)validée par un commit 'Agent: dev' (§6.0)"; return 1; }
 }
 
 # a_du_contenu <F-id> <args git log>… : vrai si un commit de la feature touche autre chose que la
@@ -81,6 +110,44 @@ a_du_contenu() {
     [ -n "$(git diff-tree --no-commit-id --name-only -r --root "$c" -- . ':!specs' ':!ROADMAP.md' ':!MEMORY' ':!PROJECT_LOG.md')" ] && return 0
   done
   return 1
+}
+
+# verdict_de <agent> < rapport : verdict lu sur la PREMIÈRE ligne non vide du rapport, au type de CET
+# agent (route A et route B) ; rien d'autre ne compte, même un verdict cité plus loin. Les mentions du
+# socle « INVALIDE (…) » et « UNVERIFIED (…) » passent telles quelles. Un gabarit recopié tel quel
+# (« PASS | FAIL », « PASS / FAIL ») n'est pas un verdict. Type d'un gate : SECURITY, ARCHITECTURE, CRAFT
+# pour les trois du socle ; sinon le nom de l'agent sans « agent- » (agent-perf => « PERF GATE: »).
+# Sinon : vide (=> UNVERIFIED).
+verdict_de() {
+  local l v t
+  l="$(grep -m1 -v '^[[:space:]]*$' | sed 's/^[#*[:space:]]*//; s/[*[:space:]]*$//')"
+  v="$(printf '%s\n' "$l" | grep -oE '^(INVALIDE|UNVERIFIED) \(.*\)')"
+  [ -n "$v" ] && { printf '%s\n' "$v"; return; }
+  printf '%s\n' "$l" | grep -qE '(PASS|FAIL|UNVERIFIED|APPROVED|CHANGES_REQUESTED)[[:space:]]*[|/]' && { echo; return; }
+  case "$1" in
+    reviewer-*)       v="$(printf '%s\n' "$l" | grep -oE '^(APPROVED|CHANGES_REQUESTED|UNVERIFIED)([^A-Za-z_]|$)' | grep -oE '^[A-Z_]+')"
+                      [ "$v" = UNVERIFIED ] && v="UNVERIFIED (contexte insuffisant pour le reviewer)"
+                      printf '%s\n' "$v"; return ;;
+    agent-securite)   t=SECURITY ;;
+    agent-architecte) t=ARCHITECTURE ;;
+    agent-craft)      t=CRAFT ;;
+    *)                t="$(printf '%s' "${1#agent-}" | tr 'a-z-' 'A-Z_')" ;;
+  esac
+  printf '%s\n' "$l" | grep -oE "^$t GATE: (PASS|FAIL|UNVERIFIED)([^A-Za-z_]|\$)" | grep -oE "^$t GATE: [A-Z]+"
+}
+
+# motif_valide <ligne> : ligne d'une liste de périmètre que le socle ET CODEOWNERS lisent de la même façon.
+# Refusés : espaces, « ! », crochets, « \ », commentaire en fin de ligne, « / » seul, et « ** » qui n'est pas
+# un segment entier (« src/**.py » vaut « src/*.py » pour git et GitHub : ambigu).
+motif_valide() {
+  local m
+  case "$1" in
+    *[[:space:]]*|'!'*|*'['*|*\\*|?*'#'*|/) return 1 ;;
+  esac
+  m="/$1/"
+  while case "$m" in */\*\*/*) true ;; *) false ;; esac; do m="${m//\/\*\*\//\/}"; done
+  case "$m" in *'**'*) return 1 ;; esac
+  return 0
 }
 
 # filtre_ext "ext1 ext2" fichier… : garde les fichiers existants dont l'extension est listée (liste vide = tout)

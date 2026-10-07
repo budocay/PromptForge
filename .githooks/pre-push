@@ -16,6 +16,6 @@ while read -r _ local_sha remote_ref remote_sha; do
   "$C/secrets.sh" --plage $plage </dev/null               || exit 2
   "$C/verifier.sh" --cle push --ref "$local_sha" </dev/null || exit 2
   # shellcheck disable=SC2086
-  "$C/gates-verts.sh" --si-principale "$remote_ref" $plage </dev/null || exit 2
+  "$C/gates-verts.sh" --si-principale "$remote_ref" --rev "$local_sha" $plage </dev/null || exit 2
 done
 exit 0

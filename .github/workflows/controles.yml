@@ -3,15 +3,17 @@ name: controles
 on:
   pull_request:
   push:
-    branches: [main]                # = BRANCHE_PRINCIPALE de .agents/outils.env
+    branches: [main] # = BRANCHE_PRINCIPALE de .agents/outils.env
+permissions:
+  contents: read
 jobs:
   controles:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
-          fetch-depth: 0            # historique complet : sinon controles.sh échoue fermé
-      - uses: actions/setup-python@v5
+          fetch-depth: 0 # historique complet : sinon controles.sh échoue fermé
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Outillage (.venv du dépôt, comme en local, et gitleaks vérifié par somme de contrôle)
@@ -19,7 +21,7 @@ jobs:
           GITLEAKS: "8.28.0"
         run: |
           python -m venv .venv
-          .venv/bin/pip install -q --upgrade pip      # le pip fourni avec le venv peut avoir des CVE (SCA)
+          .venv/bin/pip install -q --upgrade pip # le pip fourni avec le venv peut avoir des CVE (SCA)
           .venv/bin/pip install -q -e ".[all]" "ruff==0.15.8" "black==26.3.1" bandit pip-audit
           base="https://github.com/gitleaks/gitleaks/releases/download/v$GITLEAKS"
           curl -sSfLO "$base/gitleaks_${GITLEAKS}_linux_x64.tar.gz"

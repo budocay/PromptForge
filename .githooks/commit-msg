@@ -12,7 +12,7 @@ feature="$(git interpret-trailers --parse "$1" | sed -n 's/^Feature: *//p' | hea
 [ "$agent" = dev ] || [ -n "$feature" ] || { echo "FAIL : trailer 'Feature: F-xxx' (ou 'Feature: trivial') manquant" >&2; exit 2; }
 fichiers=()
 while IFS= read -r f; do [ -n "$f" ] && fichiers+=("$f"); done <<EOF
-$(git diff --cached --name-only --no-renames)
+$(git -c core.quotePath=false diff --cached --name-only --no-renames)
 EOF
 [ ${#fichiers[@]} -gt 0 ] || exit 0
 exec "$C/perimetre.sh" --fichiers "$agent" "${fichiers[@]}"

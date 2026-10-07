@@ -10,7 +10,7 @@ Le dev valide la spec `specs/F-033.md` (exposition réseau), puis `agent-fronten
 
 ## Dettes ouvertes
 
-- D-069 Sept constats bandit existants figés dans `.bandit-baseline.json` (urlopen sur URL configurable ×5, `shell=True` sous Windows dans `utils.py`, écoute `0.0.0.0` par défaut de `launch_web`) — depuis la génération — impact : relus au cas par cas, le dernier traité par F-033.
+- D-069 Sept constats bandit existants figés dans `.agents/outils/bandit-base.json` (urlopen sur URL configurable ×5, `shell=True` sous Windows dans `utils.py`, écoute `0.0.0.0` par défaut de `launch_web`) — depuis la génération — impact : relus au cas par cas, le dernier traité par F-033.
 - D-070 Pas de contrat de dépendances exécutable (le cœur ne doit pas importer `promptforge.web`) — proposer import-linter.
 
 ## État des contrôles / gates

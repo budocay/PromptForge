@@ -4,5 +4,8 @@ pyproject.toml
 README.md
 CONTRIBUTING.md
 docs/SOURCES_METHODOLOGY.md
-tests/conftest.py
+conftest.py
+pytest.ini
+tox.ini
+setup.cfg
 tests/__init__.py

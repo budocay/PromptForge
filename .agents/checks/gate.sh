@@ -39,18 +39,12 @@ git init -q "$vide"
   [ "$(cat "$d/mode" 2>/dev/null)" = conception ] \
     && echo "Revue de CONCEPTION (§6.1, STRUCTUREL) : juge l'approche, la structure, le plan et les ADR ; aucun code n'est attendu."
   for x in spec.md checks.txt diff.patch; do printf '\n### %s\n' "$x"; cat "$d/$x"; done
-} | (cd "$vide" && eval "$cmd") > "$rapport" 2>&1; code=$?
+} | (cd "$vide" && eval "$cmd") > "$rapport" 2> "$rapport.err"; code=$?   # verdict : 1re ligne de stdout
 "$C/lecture-seule.sh" fin "gate-$agent-$fid" || { journal "INVALIDE (arbre modifié)"; exit 2; }
-[ $code -eq 0 ] || refus4 "la commande de gate a échoué (code $code), voir $rapport"
+[ $code -eq 0 ] || refus4 "la commande de gate a échoué (code $code), voir $rapport et $rapport.err"
 
 # Le verdict doit être celui de CET agent : un gate sécurité qui répond « ARCHITECTURE GATE » n'a pas jugé.
-case "$agent" in
-  reviewer-*)       motif='^[#* ]*(APPROVED|CHANGES_REQUESTED)' ;;
-  agent-securite)   motif='SECURITY GATE: (PASS|FAIL|UNVERIFIED)' ;;
-  agent-architecte) motif='ARCHITECTURE GATE: (PASS|FAIL|UNVERIFIED)' ;;
-  *)                motif='[A-Z]+ GATE: (PASS|FAIL|UNVERIFIED)' ;;
-esac
-v="$(grep -m1 -oE "$motif" "$rapport" | sed 's/^[#* ]*//')"
+v="$(verdict_de "$agent" < "$rapport")"
 if [ -n "$v" ]; then journal "$v"; else journal "UNVERIFIED (verdict absent ou d'un autre type)"; fi
 echo "$agent $fid : ${v:-verdict absent} ($d/$agent.md)"
 case "$v" in

@@ -10,7 +10,7 @@ case "${1:-}" in
   --plage) shift                     # + ce que la résolution des merges ajoute à la fusion automatique
     out="$(outil SECRETS_PLAGE "$*" 2>&1)"; code=$?
     if [ $code -eq 0 ] && [ -n "$(git rev-list --merges "$@" 2>/dev/null)" ]; then
-      out="$out$(for m in $(git rev-list --merges "$@"); do git show --remerge-diff --format= -U0 --no-color "$m"; done \
+      out="$out"$'\n'"$(for m in $(git rev-list --merges "$@"); do git show --remerge-diff --format= -U0 --no-color "$m"; done \
                  | outil SECRETS_STDIN 2>&1)"; code=$?
     fi
     (exit $code) ;;
@@ -22,4 +22,4 @@ code=$?
 { [ $code -ne 0 ] || [ -n "${SOCLE_TRACE:-}" ]; } && printf '%s\n' "$out" >&2
 [ $code -eq 0 ] && exit 0
 [ $code -eq 4 ] && exit 4
-echec "secret détecté (scanner : code $code). Faux positif : allowlist du scanner, fichier protégé (§4.2)."
+echec "secret détecté, ou scanner en erreur (code $code) : lire sa sortie ci-dessus. Faux positif : §0.4 (fichiers protégés)."

@@ -4,24 +4,75 @@
 #           pour un merge : les fichiers que sa résolution change par rapport à la fusion automatique (git ≥ 2.36)
 # Listes (.agents/perimetres/) : <agent>.txt · _commun.txt (traçabilité, tout agent ayant un périmètre)
 #   _partage.txt (autorisé, signalé, revue CODEOWNERS au merge) · _protege.txt (« Agent: dev » uniquement)
-# Un glob par ligne, liste blanche ; dans [[ ]], * traverse aussi les /.
+#         perimetre.sh --couverture                      propriétaire(s) de chaque fichier suivi (à la génération)
+# Un glob par ligne, liste blanche, mêmes règles que CODEOWNERS (GitHub) : « * » et « ? » restent dans un
+# dossier, « ** » traverse ; un motif sans « / » vaut à toute profondeur (« *.md ») ; un « / » en tête ou au
+# milieu l'ancre à la racine (« /Makefile », « src/*.py ») ; « docs/ », « docs » ou « docs/** » couvrent le
+# dossier ; « docs/* » ne couvre que ses fichiers directs. Refusé (échec fermé, illisible pour CODEOWNERS) :
+# espace, « ! », « [ », « \ », commentaire en fin de ligne, « ** » qui n'est pas un segment entier.
 # shellcheck source-path=SCRIPTDIR source=lib.sh
 . "$(dirname "$0")/lib.sh"
 P=.agents/perimetres
 
+re_de() { # re_de <glob> : expression régulière étendue équivalente (motif déjà validé)
+  local g="$1" ancre=0 dossier=0 re="" i=0 n c dernier
+  case "$g" in /*) ancre=1; g="${g#/}" ;; esac
+  case "$g" in */) dossier=1; g="${g%/}" ;; esac
+  case "$g" in */*) ancre=1 ;; esac
+  n=${#g}
+  while [ "$i" -lt "$n" ]; do
+    c="${g:$i:1}"
+    case "$c" in
+      '*') if [ "${g:$i:3}" = '**/' ]; then re="$re(.*/)?"; i=$((i + 3)); continue
+           elif [ "${g:$i:2}" = '**' ]; then re="$re.*"; i=$((i + 2)); continue
+           else re="${re}[^/]*"; fi ;;
+      '?') re="${re}[^/]" ;;
+      '.'|'+'|'('|')'|'|'|'{'|'}'|'^'|'$') re="$re\\$c" ;;
+      *) re="$re$c" ;;
+    esac
+    i=$((i + 1))
+  done
+  [ $ancre -eq 1 ] || re="(.*/)?$re"
+  dernier="${g##*/}"
+  case "$dernier" in                      # le contenu d'un dossier : seulement si le dernier élément est un nom
+    *'*'*|*'?'*) if [ $dossier -eq 1 ]; then re="$re/.*"            # « d*/ » : le contenu des dossiers
+                 elif [ $ancre -eq 0 ]; then re="$re(/.*)?"; fi ;;    # « .semgrep* » : fichier ou dossier
+                                                                      # « d/* » : fichiers directs seulement
+    *) re="$re(/.*)?" ;;
+  esac
+  printf '^%s$\n' "$re"
+}
+
+# Toutes les listes sont traduites et validées ICI, dans le shell principal : une liste invalide arrête le
+# script (échec fermé) au lieu de se réduire en silence à « rien n'est couvert ».
+RE="$(mktemp -d)"; trap 'rm -rf "$RE"' EXIT
+for l in "$P"/*.txt; do
+  [ -f "$l" ] || continue
+  out="$RE/$(basename "$l")"; : > "$out"
+  while IFS= read -r g || [ -n "$g" ]; do
+    g="${g%$'\r'}"
+    case "$g" in ''|\#*) continue ;; esac
+    motif_valide "$g" || echec "$l : motif refusé « $g » (espace, !, [, \\, / seul, ** partiel ou commentaire en fin de ligne)"
+    re_de "$g" >> "$out"
+  done < "$l"
+  grep -E -f "$out" </dev/null >/dev/null 2>&1; [ $? -le 1 ] || echec "$l : expression invalide"
+done
+regex_liste() { printf '%s' "$RE/$(basename "$1")"; }   # regex_liste <liste> : fichier déjà construit
+
 couvert() { # couvert <fichier> <liste>
   [ -f "$2" ] || return 1
-  local g
-  while IFS= read -r g || [ -n "$g" ]; do
-    case "$g" in ''|\#*) continue ;; esac
-    # shellcheck disable=SC2053  # correspondance de glob voulue
-    [[ "$1" == $g ]] && return 0
-  done < "$2"
-  return 1
+  local r; r="$(regex_liste "$2")"
+  [ -s "$r" ] && printf '%s\n' "$1" | grep -qE -f "$r"
 }
 
 relatif() { # chemin absolu ou Windows -> relatif à la racine ; « .. » refusé
-  local f="${1//\\//}" r="${RACINE//\\//}"
+  local f="${1//\\//}" r="${RACINE//\\//}" a rest=""
+  case "$f" in                          # chemin absolu hors de RACINE (lien symbolique) : chemin physique
+    /*) case "$f/" in "$r"/*) ;; *)
+          a="$f"; while [ -n "$a" ] && [ ! -d "$a" ]; do rest="/${a##*/}$rest"; a="${a%/*}"; done
+          if [ -n "$a" ] && a="$(cd "$a" 2>/dev/null && pwd -P)"; then f="$a$rest"; fi ;;
+        esac ;;
+  esac
   f="${f#"$r"/}"; f="${f#./}"
   case "/$f/" in */../*) echo ".." ;; *) echo "$f" ;; esac
 }
@@ -69,7 +120,35 @@ case "${1:-}" in
 $(if git rev-parse -q --verify "$c^2" >/dev/null; then printf '%s\n' "$res"; else git diff-tree --no-commit-id --name-only -r --root "$c"; fi)
 EOF
     done ;;
-  *) echec "usage : perimetre.sh --fichiers <agent> <fichier>… | --commits <args rev-list>…" ;;
+  --couverture)        # à la génération : un grep par liste, puis le décompte par fichier
+    tous="$RE/tous"; git ls-files > "$tous"
+    : > "$RE/exclus"; : > "$RE/proprios"
+    for l in "$P"/*.txt; do
+      b="$(basename "$l" .txt)"; r="$(regex_liste "$l")"; [ -s "$r" ] || continue
+      case "$b" in
+        _*) grep -E -f "$r" "$tous" >> "$RE/exclus" ;;
+        *)  grep -E -f "$r" "$tous" | sed "s|^|$b	|" >> "$RE/proprios" ;;
+      esac
+    done
+    awk -F'\t' -v E="$RE/exclus" -v A="$RE/proprios" '
+      BEGIN { while ((getline f < E) > 0) ex[f] = 1
+              while ((getline l < A) > 0) { split(l, x, "\t"); n[x[2]]++; who[x[2]] = who[x[2]] " " x[1] } }
+      !($0 in ex) { if (!($0 in n)) print "SANS PROPRIÉTAIRE : " $0
+                    else if (n[$0] > 1) { print "PLUSIEURS PROPRIÉTAIRES :" who[$0] " : " $0; k++ } }
+      END { exit (k > 0) ? 2 : 0 }' "$tous"; n=$?
+    for l in "$P"/*.txt; do                 # motif qui ne couvre rien : fichier à venir, ou faute de frappe
+      s=""
+      # shellcheck disable=SC2094  # la liste n'est que lue
+      while IFS= read -r g || [ -n "$g" ]; do
+        g="${g%$'\r'}"; case "$g" in ''|\#*) continue ;; esac
+        grep -qE "$(re_de "$g")" "$tous" || s="$s $g"
+      done < "$l"
+      [ -z "$s" ] || echo "GLOB SANS EFFET (fichier à venir ou faute de frappe ?) : $(basename "$l") :$s"
+    done
+    [ $n -eq 0 ] || echec "fichier(s) à plusieurs propriétaires : ils s'écraseront (§2.3)"
+    echo "COUVERTURE : OK, aucun fichier suivi à plusieurs propriétaires ($(wc -l < "$tous" | tr -d ' ') fichiers ; ajouter les nouveaux avec git add avant)"
+    exit 0 ;;
+  *) echec "usage : perimetre.sh --fichiers <agent> <fichier>… | --commits <args rev-list>… | --couverture" ;;
 esac
 [ $rc -eq 0 ] || echo "Écriture refusée : demande au propriétaire du fichier ou au dev (§2.3)." >&2
 exit $rc

@@ -13,6 +13,16 @@
 # shellcheck source-path=SCRIPTDIR source=lib.sh
 . "$(dirname "$0")/lib.sh"
 check=0; [ "${1:-}" = --check ] && check=1
+ecrase() { # ecrase <fichier> : projet existant, ne jamais écraser en silence un fichier écrit à la main
+  [ -f "$1" ] && ! grep -q "généré par .agents/checks/sync-agents.sh" "$1" \
+    && echec "$1 existe et n'est pas généré : reporter son contenu (dans AGENTS.md, ou dans _protege/_partage), le supprimer, puis relancer (§0.4)"
+  return 0
+}
+case " ${HARNESS:-} " in *" claude-code "*) ecrase CLAUDE.md ;; esac
+if [ -n "${CODEOWNER:-}" ]; then
+  ecrase CODEOWNERS
+  [ -f .github/CODEOWNERS ] && echec ".github/CODEOWNERS existe et prime sur CODEOWNERS à la racine (GitHub) : reporter ses règles dans _protege/_partage et le supprimer (§0.4)"
+fi
 sortie="$RACINE"; [ $check -eq 1 ] && { sortie="$(mktemp -d)"; trap 'rm -rf "$sortie"' EXIT; }
 GEN="généré par .agents/checks/sync-agents.sh : ne pas éditer"
 
@@ -77,7 +87,7 @@ if [ -n "${CODEOWNER:-}" ]; then
   { echo "# $GEN — depuis .agents/perimetres/_protege.txt et _partage.txt"
     cat .agents/perimetres/_protege.txt .agents/perimetres/_partage.txt 2>/dev/null \
       | grep -v -e '^#' -e '^[[:space:]]*$' | while IFS= read -r g; do
-          case "$g" in /*|\*\**) echo "$g $CODEOWNER" ;; *) echo "/$g $CODEOWNER" ;; esac
+          echo "$g $CODEOWNER"                  # mêmes règles de motif que le socle (perimetre.sh)
         done
     echo "/specs/ $CODEOWNER"              # contrat validé par le dev (§6.0)
     echo "/MEMORY/gates.log $CODEOWNER"; } > "$sortie/CODEOWNERS"   # journal lu par gates-verts.sh
