@@ -14,6 +14,8 @@ agent="$(printf '%s\n' "$tr_" | grep -i '^agent:' | cut -d: -f2- | tr -d '[:spac
 [ -n "$agent" ] || { echo "FAIL : trailer 'Agent: <id>' manquant (ou 'Agent: dev' pour un commit humain)" >&2; exit 2; }
 feature="$(printf '%s\n' "$tr_" | grep -i '^feature:' | cut -d: -f2- | tr -d '[:space:]')"
 [ "$agent" = dev ] || [ -n "$feature" ] || { echo "FAIL : trailer 'Feature: F-xxx' (ou 'Feature: trivial') manquant" >&2; exit 2; }
+[ -z "$feature" ] || printf '%s\n' "$feature" | grep -qxE 'F-[0-9]+|trivial' \
+  || { echo "FAIL : trailer « Feature: $feature » invalide (F-<nombre> ou trivial)" >&2; exit 2; }
 fichiers=()
 while IFS= read -r f; do [ -n "$f" ] && fichiers+=("$f"); done <<EOF
 $(git -c core.quotePath=false diff --cached --name-only --no-renames)

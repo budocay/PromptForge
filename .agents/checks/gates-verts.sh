@@ -21,11 +21,17 @@ fi
 if [ "${1:-}" = --rev ]; then rev="${2:?usage : --rev <commit>}"; shift 2; fi
 [ $# -gt 0 ] || echec "usage : gates-verts.sh [--rev <commit>] <args git log>…"
 git rev-parse --verify --quiet "$rev^{commit}" >/dev/null || echec "commit introuvable : $rev"
-features="$(git log --format='%(trailers:key=Feature,valueonly)' "$@" 2>/dev/null)" || echec "plage introuvable : $*"
+git rev-list "$@" >/dev/null 2>&1 || echec "plage introuvable : $*"
 J=MEMORY/gates.log; rc=0
 journal="$(git show "$rev:$J" 2>/dev/null)"
 ko() { echo "$1" >&2; rc=2; }
-for fid in $(printf '%s\n' "$features" | tr -d ' ' | grep -v -x -e '' -e trivial | sort -u); do
+while IFS= read -r v; do
+  [ -z "$v" ] || ko "FAIL : trailer « Feature: $v » invalide (F-<nombre> ou trivial)"
+done <<EOF
+$(valeurs_feature "$@" | grep -vxE "$FEATURE_RE")
+EOF
+set -f                                              # aucune valeur ne s'étend en noms de fichiers
+for fid in $(features_de "$@"); do
   spec="specs/$fid.md"
   a_du_contenu "$fid" "$@" || { echo "GATES $fid : planification seulement (spec, ROADMAP), aucun gate requis"; continue; }
   git cat-file -e "$rev:$spec" 2>/dev/null || { ko "FAIL $fid : spec absente ($spec)"; continue; }

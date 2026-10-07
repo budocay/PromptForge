@@ -70,14 +70,23 @@ accepte() {
 # merge (quel que soit l'ordre des parents) et chaque commit d'agent sans feature ou « Feature: trivial »
 # (du code glissé après la revue). N'y entrent pas : les commits d'une autre feature (ses propres gates)
 # ni ceux du dev. Un verdict vaut pour ce contenu-là.
+# Valeur d'un trailer « Feature: » : F-<nombre> ou trivial, lue partout de la même façon (blancs retirés).
+# shellcheck disable=SC2034  # lue par perimetre.sh et gates-verts.sh
+FEATURE_RE='F-[0-9]+|trivial'
+valeurs_feature() { # valeurs_feature <args git log>… : valeurs « Feature: » de la plage, une par ligne
+  git log --format='%(trailers:key=Feature,valueonly)' "$@" | tr -d ' \t\r' | grep -v '^$' | sort -u
+}
+features_de() { # features_de <args git log>… : identifiants F-<nombre> de la plage (valeurs invalides écartées)
+  valeurs_feature "$@" | grep -xE 'F-[0-9]+'
+}
 commits_feature() { # commits_feature <F-id> <args git log>… : commits « Feature: <F-id> », merges compris
   local fid="$1"; shift
   git log --format='%H %(trailers:key=Feature,valueonly,separator=)' "$@" \
-    | awk -v f="$fid" '{gsub(/ /,"",$2)} $2==f {print $1}'
+    | awk -v f="$fid" '{h = $1; $1 = ""; v = $0; gsub(/[ \t\r]/, "", v); if (v == f) print h}'
 }
 contenu_de() { # contenu_de <commit> : diff hors traçabilité (merge : ce que sa résolution ajoute à la fusion automatique)
-  if git rev-parse -q --verify "$1^2" >/dev/null; then
-    git show --remerge-diff --format= "$1" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md'
+  if git rev-parse -q --verify "$1^2" >/dev/null; then     # hachages complets : même texte quel que soit core.abbrev
+    git -c core.abbrev=40 show --remerge-diff --full-index --format= "$1" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md'
   else
     git show --format= "$1" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md'
   fi
@@ -143,7 +152,11 @@ spec_dev() { # spec_dev <spec> <rev> : le contenu de la spec vu de <rev> vient d
 a_du_contenu() {
   local fid="$1" c; shift
   for c in $(commits_feature "$fid" "$@"); do
-    contenu_de "$c" | grep '^diff ' | grep -qv -e ' a/specs/' -e ' a/ROADMAP.md ' -e ' a/MEMORY/' -e ' a/PROJECT_LOG.md ' && return 0
+    if git rev-parse -q --verify "$c^2" >/dev/null; then
+      [ -n "$(git show --remerge-diff --format= --name-only "$c" -- . ':!specs' ':!ROADMAP.md' ':!MEMORY' ':!PROJECT_LOG.md')" ] && return 0
+    else
+      [ -n "$(git diff-tree --no-commit-id --name-only -r --root "$c" -- . ':!specs' ':!ROADMAP.md' ':!MEMORY' ':!PROJECT_LOG.md')" ] && return 0
+    fi
   done
   return 1
 }

@@ -122,8 +122,12 @@ case "${1:-}" in
       agent="$(git log -1 --format='%(trailers:key=Agent,valueonly)' "$c" | head -n 1 | tr -d '[:space:]')"
       [ -n "$agent" ] || { echo "Commit $court sans trailer 'Agent:'" >&2; rc=2; continue; }
       [ "$agent" = dev ] || [ -f "$P/$agent.txt" ] || { echo "Commit $court : agent inconnu '$agent'" >&2; rc=2; continue; }
-      if [ "$agent" != dev ] && [ -z "$(git log -1 --format='%(trailers:key=Feature,valueonly)' "$c" | tr -d '[:space:]')" ]; then
+      fe="$(git log -1 --format='%(trailers:key=Feature,valueonly)' "$c" | tr -d '[:space:]')"
+      if [ "$agent" != dev ] && [ -z "$fe" ]; then
         echo "Commit $court ($agent) sans trailer 'Feature:' (F-xxx ou trivial)" >&2; rc=2; continue
+      fi
+      if [ -n "$fe" ] && ! printf '%s\n' "$fe" | grep -qxE "$FEATURE_RE"; then
+        echo "Commit $court : trailer « Feature: $fe » invalide (F-<nombre> ou trivial)" >&2; rc=2; continue
       fi
       while IFS= read -r f; do
         [ -n "$f" ] && signaler "$(statut "$agent" "$f")" "$f" "commit $court, $agent"

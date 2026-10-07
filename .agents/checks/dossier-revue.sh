@@ -18,7 +18,7 @@ if git rev-parse --verify --quiet "origin/$B^{commit}" >/dev/null; then cible="o
 elif [ -z "$(git remote)" ]; then cible="$B"                        # dépôt local sans remote
 else echec "origin/$B introuvable (git fetch)"; fi
 base="$(git merge-base HEAD "$cible" 2>/dev/null)" || echec "pas de point commun avec $cible"
-git log --format='%(trailers:key=Feature,valueonly)' "$base..HEAD" | tr -d ' ' | grep -qx "$fid" \
+features_de "$base..HEAD" | grep -qx -- "$fid" \
   || echec "aucun commit 'Feature: $fid' depuis $cible (travailler sur une branche de feature) : rien à revoir"
 d=".agents/review/$fid"; rm -rf "$d"; mkdir -p "$d" .agents/.state
 cp "$spec" "$d/spec.md"

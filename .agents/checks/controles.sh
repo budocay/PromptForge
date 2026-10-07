@@ -47,7 +47,7 @@ for t in $(chaines); do
   # shellcheck disable=SC2016  # développé par le bash -c
   etape "tests$(suffixe "$t")" bash -c '. .agents/checks/lib.sh; eval "r=\${${1}TEST_RACINE:-.}"; cd "$r" || exit 2; outil "${1}TEST"' _ "$(prefixe "$t")"
 done
-for fid in $(git log --format='%(trailers:key=Feature,valueonly)' "$plage" | tr -d ' ' | grep -v -x -e '' -e trivial | sort -u); do
+for fid in $(features_de "$plage"); do
   if ! a_du_contenu "$fid" "$plage"; then echo "CONTROLE ac-couverture $fid: NON APPLICABLE (planification seulement)"
   elif [ $conception -eq 1 ]; then echo "CONTROLE ac-couverture $fid: NON APPLICABLE (revue de conception : aucun code attendu)"
   else etape "ac-couverture $fid" "$C/ac-couverture.sh" "$fid"; fi
