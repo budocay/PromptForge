@@ -20,6 +20,9 @@ from pathlib import Path
 LAUNCHER_PORT = 7850
 PROMPTFORGE_PORT = 7860
 OLLAMA_PORT = 11434
+# F-033 : Ollama n'ecoute que sur la boucle locale, sauf choix explicite de
+# l'utilisateur (`OLLAMA_HOST` deja defini dans son environnement).
+OLLAMA_DEFAULT_HOST = f"127.0.0.1:{OLLAMA_PORT}"
 
 # ---------------------------------------------------------------------------
 # Le launcher ne connait ni les modeles, ni le materiel : il les demande
@@ -1110,11 +1113,6 @@ def clean_docker():
 
     log("Nettoyage termine")
     check_docker_images()
-
-
-# F-033 : Ollama n'ecoute que sur la boucle locale, sauf choix explicite de
-# l'utilisateur (`OLLAMA_HOST` deja defini dans son environnement).
-OLLAMA_DEFAULT_HOST = f"127.0.0.1:{OLLAMA_PORT}"
 
 
 def ollama_env(base_env, gfx_version=None):
