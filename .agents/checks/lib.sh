@@ -84,19 +84,38 @@ commits_feature() { # commits_feature <F-id> <args git log>… : commits « Feat
   git log --format='%H %(trailers:key=Feature,valueonly,separator=)' "$@" \
     | awk -v f="$fid" '{h = $1; $1 = ""; v = $0; gsub(/[ \t\r]/, "", v); if (v == f) print h}'
 }
-contenu_de() { # contenu_de <commit> : diff hors traçabilité (merge : ce que sa résolution ajoute à la fusion automatique)
-  if git rev-parse -q --verify "$1^2" >/dev/null; then     # hachages complets : même texte quel que soit core.abbrev
-    git -c core.abbrev=40 show --remerge-diff --full-index --format= "$1" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md'
+# Fichiers de traçabilité exacts (jamais un dossier qui porterait ce nom) : hors empreinte. Les specs, en
+# plus, ne font pas d'une feature autre chose que de la planification.
+TRACE_RE='^(PROJECT_LOG\.md|ROADMAP\.md|MEMORY/gates\.log|MEMORY/.*\.md)$'
+PLANIF_RE='^specs/[^/]*\.md$'
+fichiers_de() { # fichiers_de <commit> : fichiers changés (merge : ceux que sa résolution change), un par ligne
+  if git rev-parse -q --verify "$1^2" >/dev/null; then
+    git show --remerge-diff --no-renames --format= --name-only "$1" | sort -u
   else
-    git show --format= "$1" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md'
+    git diff-tree --no-commit-id --no-renames --name-only -r --root "$1"
   fi
 }
-empreinte_de() { # empreinte_de <commit> : patch-id (stable par rebase) ; merge : condensé de sa résolution
+# Diff au texte fixe, quelle que soit la configuration git du poste (préfixes, contexte, algorithme,
+# abréviations, style de conflit, pilotes externes) : la même empreinte en local et en CI.
+DIFF_FIXE=(-c diff.noprefix=false -c diff.mnemonicPrefix=false -c diff.context=3 -c diff.algorithm=myers
+           -c diff.indentHeuristic=true -c diff.suppressBlankEmpty=false -c diff.renames=false
+           -c merge.conflictStyle=merge -c core.abbrev=40)
+contenu_de() { # contenu_de <commit> : diff hors traçabilité (merge : ce que sa résolution ajoute à la fusion automatique)
+  local f l=()
+  while IFS= read -r f; do [ -n "$f" ] && l+=(":(literal)$f"); done <<EOF
+$(fichiers_de "$1" | grep -vE "$TRACE_RE")
+EOF
+  [ ${#l[@]} -gt 0 ] || return 0
+  if git rev-parse -q --verify "$1^2" >/dev/null; then set -- --remerge-diff "$1"; fi
+  git "${DIFF_FIXE[@]}" show "$@" --format= --no-ext-diff --no-textconv --no-renames --text --full-index \
+    --src-prefix=a/ --dst-prefix=b/ -U3 -- "${l[@]}"
+}
+empreinte_de() { # empreinte_de <commit> : patch-id blancs compris (stable par rebase) ; merge : condensé de sa résolution
   local r
   if git rev-parse -q --verify "$1^2" >/dev/null; then
     r="$(contenu_de "$1")"; [ -z "$r" ] || printf 'fusion %s\n' "$(printf '%s\n' "$r" | git hash-object --stdin)"
   else
-    contenu_de "$1" | git patch-id --stable | cut -d' ' -f1
+    contenu_de "$1" | git patch-id --verbatim | cut -d' ' -f1
   fi
 }
 apres_feature() { # apres_feature "<commits F>" <args git log>… : « M <merge> » / « C <commit> » à compter en plus
@@ -152,11 +171,7 @@ spec_dev() { # spec_dev <spec> <rev> : le contenu de la spec vu de <rev> vient d
 a_du_contenu() {
   local fid="$1" c; shift
   for c in $(commits_feature "$fid" "$@"); do
-    if git rev-parse -q --verify "$c^2" >/dev/null; then
-      [ -n "$(git show --remerge-diff --format= --name-only "$c" -- . ':!specs' ':!ROADMAP.md' ':!MEMORY' ':!PROJECT_LOG.md')" ] && return 0
-    else
-      [ -n "$(git diff-tree --no-commit-id --name-only -r --root "$c" -- . ':!specs' ':!ROADMAP.md' ':!MEMORY' ':!PROJECT_LOG.md')" ] && return 0
-    fi
+    fichiers_de "$c" | grep -vE "$TRACE_RE" | grep -qvE "$PLANIF_RE" && return 0
   done
   return 1
 }

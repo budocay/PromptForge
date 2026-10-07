@@ -14,7 +14,8 @@
 . "$(dirname "$0")/lib.sh"
 P=.agents/perimetres
 
-re_de() { # re_de <glob> : expression régulière étendue équivalente (motif déjà validé)
+re_de() { # re_de <glob> [fichier] : expression régulière étendue équivalente (motif déjà validé) ; « fichier » :
+          # un nom couvre ce fichier seulement, pas un dossier du même nom (_commun.txt : traçabilité)
   local g="$1" ancre=0 dossier=0 re="" i=0 n c dernier
   case "$g" in /*) ancre=1; g="${g#/}" ;; esac
   case "$g" in */) dossier=1; g="${g%/}" ;; esac
@@ -38,7 +39,7 @@ re_de() { # re_de <glob> : expression régulière étendue équivalente (motif d
     *'*'*|*'?'*) if [ $dossier -eq 1 ]; then re="$re/.*"            # « d*/ » : le contenu des dossiers
                  elif [ $ancre -eq 0 ]; then re="$re(/.*)?"; fi ;;    # « .semgrep* » : fichier ou dossier
                                                                       # « d/* » : fichiers directs seulement
-    *) re="$re(/.*)?" ;;
+    *) [ "${2:-}" = fichier ] || re="$re(/.*)?" ;;
   esac
   printf '^%s$\n' "$re"
 }
@@ -48,12 +49,13 @@ re_de() { # re_de <glob> : expression régulière étendue équivalente (motif d
 RE="$(mktemp -d)"; trap 'rm -rf "$RE"' EXIT
 for l in "$P"/*.txt; do
   [ -f "$l" ] || continue
-  out="$RE/$(basename "$l")"; : > "$out"
+  out="$RE/$(basename "$l")"; : > "$out"; mode=""
+  [ "$(basename "$l")" = _commun.txt ] && mode=fichier
   while IFS= read -r g || [ -n "$g" ]; do
     g="${g%$'\r'}"
     case "$g" in ''|\#*) continue ;; esac
     motif_valide "$g" || echec "$l : motif refusé « $g » (espace, !, [, \\, / seul, ** partiel ou commentaire en fin de ligne)"
-    re_de "$g" >> "$out"
+    re_de "$g" $mode >> "$out"
   done < "$l"
   grep -E -f "$out" </dev/null >/dev/null 2>&1; [ $? -le 1 ] || echec "$l : expression invalide"
 done
@@ -111,7 +113,7 @@ case "${1:-}" in
         echo "Commit $court : merge à plus de deux parents refusé (fusionner une branche à la fois)" >&2; rc=2; continue
       fi
       if git rev-parse -q --verify "$c^2" >/dev/null; then              # merge
-        res="$(git show --remerge-diff --format= --name-only "$c" 2>/dev/null)" || echec "git ≥ 2.36 requis (--remerge-diff)"
+        res="$(git show --remerge-diff --format= --name-only "$c" 2>/dev/null)" || echec "git ≥ 2.39 requis (--remerge-diff)"
         [ -n "$res" ] || continue                                        # fusion automatique : rien d'ajouté
       fi
       # exactement un « Agent: » et au plus un « Feature: » : les scripts lisent un trailer, pas une liste

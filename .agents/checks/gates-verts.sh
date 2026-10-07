@@ -39,7 +39,7 @@ for fid in $(features_de "$@"); do
   contenu="$(git show "$rev:$spec")"
   tier="$(printf '%s\n' "$contenu" | sed -n 's/^Tier : *\([a-z]*\).*/\1/p' | head -n 1)"
   case "$tier" in
-    trivial)    requis=""; var="" ;;
+    trivial)    ko "FAIL $fid : « Tier : trivial » dans une spec (un changement trivial n'a pas de spec, §6.0 : commits « Feature: trivial »)"; continue ;;
     standard)   requis="${GATES_STANDARD-}"; var=GATES_STANDARD ;;
     structurel) requis="${GATES_STRUCTUREL-}"; var=GATES_STRUCTUREL ;;
     *) ko "FAIL $fid : ligne « Tier : standard | structurel » absente de $spec"; continue ;;

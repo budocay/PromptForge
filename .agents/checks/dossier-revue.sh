@@ -22,7 +22,7 @@ features_de "$base..HEAD" | grep -qx -- "$fid" \
   || echec "aucun commit 'Feature: $fid' depuis $cible (travailler sur une branche de feature) : rien à revoir"
 d=".agents/review/$fid"; rm -rf "$d"; mkdir -p "$d" .agents/.state
 cp "$spec" "$d/spec.md"
-git diff -U30 "$base" HEAD -- . ':(exclude,glob)**/.env*' ':(exclude,glob)**/secrets/**' > "$d/diff.patch"
+git diff --no-ext-diff --no-textconv --text -U30 "$base" HEAD -- . ':(exclude,glob)**/.env*' ':(exclude,glob)**/secrets/**' > "$d/diff.patch"
 empreinte_feature "$fid" "$base..HEAD" > "$d/empreinte"
 echo "$fid $(cat "$d/empreinte")" > .agents/.state/dossier-courant
 echo "${mode:+conception}" > "$d/mode"
