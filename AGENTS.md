@@ -12,7 +12,7 @@
 
 ## Commandes du projet
 
-- Environnement : `python3 -m venv .venv && .venv/bin/pip install -e ".[all]" bandit pip-audit` (les contrôles utilisent `.venv/bin/…`).
+- Environnement : `python3 -m venv .venv && .venv/bin/pip install -U pip && .venv/bin/pip install -e ".[all]" bandit pip-audit` (les contrôles utilisent `.venv/bin/…` ; un pip ancien fait échouer SCA).
 - Tests : `.venv/bin/python -m pytest tests/ -q -m "not integration"` · Lint : `.venv/bin/ruff check` · Format : `.venv/bin/black --check`.
 - Lancer : `python start.py` (web, 127.0.0.1:7860) · `promptforge --help` (CLI) · `python launcher.py` (lanceur et mesure machine).
 

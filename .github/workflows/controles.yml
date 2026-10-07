@@ -19,6 +19,7 @@ jobs:
           GITLEAKS: "8.28.0"
         run: |
           python -m venv .venv
+          .venv/bin/pip install -q --upgrade pip      # le pip fourni avec le venv peut avoir des CVE (SCA)
           .venv/bin/pip install -q -e ".[all]" "ruff==0.15.8" "black==26.3.1" bandit pip-audit
           base="https://github.com/gitleaks/gitleaks/releases/download/v$GITLEAKS"
           curl -sSfLO "$base/gitleaks_${GITLEAKS}_linux_x64.tar.gz"
