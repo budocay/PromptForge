@@ -60,12 +60,27 @@ accepte() {
 
 # empreinte_feature <F-id> <args git log>… : empreinte du contenu des commits « Feature: <F-id> » (hors
 # traçabilité : MEMORY/, PROJECT_LOG.md, ROADMAP.md), stable par rebase. Un verdict vaut pour ce contenu-là.
+commits_feature() { # commits_feature <F-id> <args git log>… : commits « Feature: <F-id> » (hors merges)
+  local fid="$1"; shift
+  git log --no-merges --format='%H %(trailers:key=Feature,valueonly,separator=)' "$@" \
+    | awk -v f="$fid" '{gsub(/ /,"",$2)} $2==f {print $1}'
+}
 empreinte_feature() {
   local fid="$1" c; shift
-  for c in $(git log --no-merges --format='%H %(trailers:key=Feature,valueonly,separator=)' "$@" \
-             | awk -v f="$fid" '{gsub(/ /,"",$2)} $2==f {print $1}'); do
+  for c in $(commits_feature "$fid" "$@"); do
     git show --format= "$c" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md' | git patch-id --stable | cut -d' ' -f1
   done | sort | git hash-object --stdin | cut -c1-12
+}
+
+# a_du_contenu <F-id> <args git log>… : vrai si un commit de la feature touche autre chose que la
+# planification et la traçabilité (specs/, ROADMAP.md, MEMORY/, PROJECT_LOG.md). Sinon, aucune exigence
+# de test ni de gate : une PR qui n'apporte qu'une spec en brouillon reste verte.
+a_du_contenu() {
+  local fid="$1" c; shift
+  for c in $(commits_feature "$fid" "$@"); do
+    [ -n "$(git diff-tree --no-commit-id --name-only -r --root "$c" -- . ':!specs' ':!ROADMAP.md' ':!MEMORY' ':!PROJECT_LOG.md')" ] && return 0
+  done
+  return 1
 }
 
 # filtre_ext "ext1 ext2" fichier… : garde les fichiers existants dont l'extension est listée (liste vide = tout)

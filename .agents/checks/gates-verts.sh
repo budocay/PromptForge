@@ -1,7 +1,8 @@
 #!/bin/bash
 # Usage : gates-verts.sh <args git log>…                 (CI : "<base>..HEAD", ou HEAD au premier push)
 #         gates-verts.sh --si-principale <ref> <args>…   (pre-push : seulement vers BRANCHE_PRINCIPALE)
-# Pour chaque feature des commits de la plage (hors « trivial ») : chaque gate requis — ceux de son tier
+# Pour chaque feature des commits de la plage (hors « trivial », et hors planification seule : commits qui
+# ne touchent que specs/, ROADMAP.md, MEMORY/, PROJECT_LOG.md) : chaque gate requis — ceux de son tier
 # (ligne « Tier : » de la spec ; GATES_STANDARD / GATES_STRUCTUREL dans outils.env) plus les reviewers de la
 # ligne « Revue : » de la spec (un par domaine touché, §6.0) — a pour DERNIER verdict
 # dans MEMORY/gates.log un PASS ou APPROVED sur le contenu actuel de la feature (empreinte, lib.sh), ou une
@@ -19,6 +20,7 @@ J=MEMORY/gates.log; rc=0
 ko() { echo "$1" >&2; rc=2; }
 for fid in $(printf '%s\n' "$features" | tr -d ' ' | grep -v -x -e '' -e trivial | sort -u); do
   spec="specs/$fid.md"
+  a_du_contenu "$fid" "$@" || { echo "GATES $fid : planification seulement (spec, ROADMAP), aucun gate requis"; continue; }
   [ -f "$spec" ] || { ko "FAIL $fid : spec absente ($spec)"; continue; }
   tier="$(sed -n 's/^Tier : *\([a-z]*\).*/\1/p' "$spec" | head -n 1)"
   case "$tier" in

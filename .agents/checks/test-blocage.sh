@@ -115,6 +115,8 @@ attendu passe  "outil composé (deux chaînes d'outils) : s'exécute" bash -c "$
 attendu bloque "outil non configuré => UNVERIFIED"              bash -c '. .agents/checks/lib.sh; outil OUTIL_INEXISTANT'
 [ -f .agents/perimetres/agent-planif.txt ] && \
 attendu bloque "revue : spec modifiée après la validation du dev" bash -c "$F; ecrire specs/F-900.md 'Statut : validée'; commitf s agent-planif F-900 && ecrire '$dedans' ok && commitf t $agent F-900 && .agents/checks/dossier-revue.sh F-900"
+[ -f .agents/perimetres/agent-planif.txt ] && \
+attendu passe  "pre-push vers $P : planification seule (spec en brouillon), aucun gate exigé" bash -c "$F; ecrire specs/F-901.md 'Statut : brouillon'; printf 'Tier : standard\\n' >> specs/F-901.md; git add -A; commitf p agent-planif F-901 && $pousser"
 command -v python3 >/dev/null 2>&1 && \
 attendu bloque "deps : manifeste non géré modifié => UNVERIFIED" bash -c "$F; ecrire go.mod 'module exemple'; git commit -q -m g --trailer 'Agent: dev' && python3 .agents/checks/deps-nouvelles.py $base"
 attendu bloque "CI : base introuvable (clone partiel)"           .agents/checks/perimetre.sh --commits origin/inexistante..HEAD
