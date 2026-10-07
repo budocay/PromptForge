@@ -36,4 +36,8 @@ jobs:
           if [ "$EVENT" = pull_request ]; then base="origin/$BASE_REF"; plage="$base..HEAD"
           elif [ "$AVANT" = 0000000000000000000000000000000000000000 ]; then base=--tout; plage=HEAD   # premier push
           else base="$AVANT"; plage="$base..HEAD"; fi
-          .agents/checks/controles.sh "$base" && .agents/checks/gates-verts.sh "$plage"
+          set -o pipefail
+          # Chaque contrôle en échec devient une annotation visible dans la PR (sortie brute comprise).
+          annoter() { awk '/^CONTROLE .*: (FAIL|UNVERIFIED)/{if(b)print b; b=$0; next} /^CONTROLE |^RESULTAT/{if(b)print b; b=""; next} b{b=b"%0A"$0} END{if(b)print b}' | sed 's/^/::error title=controles::/'; }
+          .agents/checks/controles.sh "$base" | tee checks.txt || { annoter < checks.txt; exit 2; }
+          .agents/checks/gates-verts.sh "$plage" 2>&1 | tee gates.txt || { sed 's/^/::error title=gates::/' gates.txt; exit 2; }
