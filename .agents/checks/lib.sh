@@ -70,10 +70,25 @@ accepte() {
 # merge (quel que soit l'ordre des parents) et chaque commit d'agent sans feature ou « Feature: trivial »
 # (du code glissé après la revue). N'y entrent pas : les commits d'une autre feature (ses propres gates)
 # ni ceux du dev. Un verdict vaut pour ce contenu-là.
-commits_feature() { # commits_feature <F-id> <args git log>… : commits « Feature: <F-id> » (hors merges)
+commits_feature() { # commits_feature <F-id> <args git log>… : commits « Feature: <F-id> », merges compris
   local fid="$1"; shift
-  git log --no-merges --format='%H %(trailers:key=Feature,valueonly,separator=)' "$@" \
+  git log --format='%H %(trailers:key=Feature,valueonly,separator=)' "$@" \
     | awk -v f="$fid" '{gsub(/ /,"",$2)} $2==f {print $1}'
+}
+contenu_de() { # contenu_de <commit> : diff hors traçabilité (merge : ce que sa résolution ajoute à la fusion automatique)
+  if git rev-parse -q --verify "$1^2" >/dev/null; then
+    git show --remerge-diff --format= "$1" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md'
+  else
+    git show --format= "$1" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md'
+  fi
+}
+empreinte_de() { # empreinte_de <commit> : patch-id (stable par rebase) ; merge : condensé de sa résolution
+  local r
+  if git rev-parse -q --verify "$1^2" >/dev/null; then
+    r="$(contenu_de "$1")"; [ -z "$r" ] || printf 'fusion %s\n' "$(printf '%s\n' "$r" | git hash-object --stdin)"
+  else
+    contenu_de "$1" | git patch-id --stable | cut -d' ' -f1
+  fi
 }
 apres_feature() { # apres_feature "<commits F>" <args git log>… : « M <merge> » / « C <commit> » à compter en plus
   local cs="$1"; shift
@@ -91,20 +106,11 @@ apres_feature() { # apres_feature "<commits F>" <args git log>… : « M <merge>
               else if (A[h] != "dev" && (E[h] == "" || E[h] == "trivial")) print "C " h } }'
 }
 empreinte_feature() {
-  local fid="$1" cs c genre r; shift
+  local fid="$1" cs c; shift
   cs="$(commits_feature "$fid" "$@" | tr '\n' ' ')"
   {
-    for c in $cs; do
-      git show --format= "$c" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md' | git patch-id --stable | cut -d' ' -f1
-    done
-    [ -z "$cs" ] || apres_feature "$cs" "$@" | while read -r genre c; do
-      if [ "$genre" = M ]; then
-        r="$(git show --remerge-diff --format= "$c" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md')"
-        [ -z "$r" ] || printf 'fusion %s\n' "$(printf '%s\n' "$r" | git hash-object --stdin)"
-      else
-        git show --format= "$c" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md' | git patch-id --stable | cut -d' ' -f1
-      fi
-    done
+    for c in $cs; do empreinte_de "$c"; done
+    [ -z "$cs" ] || apres_feature "$cs" "$@" | while read -r _ c; do empreinte_de "$c"; done
   } | sort | git hash-object --stdin | cut -c1-12
 }
 
@@ -112,16 +118,23 @@ empreinte_feature() {
 # qui en a changé le contenu est un commit du dev (validation ou revalidation, §6.0) ; un merge compte
 # seulement si sa résolution touche la spec. Sinon : raison sur stdout, code 1.
 spec_validee() {
-  local a c
   git show "$2:$1" 2>/dev/null | grep -q '^Statut : validée' \
     || { echo "$1 n'est pas validée (ligne « Statut : validée » attendue, §6.0)"; return 1; }
-  for c in $(git log --format=%H "$2" -- "$1"); do
-    if git rev-parse -q --verify "$c^2" >/dev/null && [ -z "$(git show --remerge-diff --format= "$c" -- "$1")" ]; then
-      continue                                                   # merge sans résolution sur la spec
-    fi
-    a="$(git log -1 --format='x%(trailers:key=Agent,valueonly,separator=)' "$c" | tr -d ' ')"; a="${a#x}"; break
-  done
-  [ "${a:-}" = dev ] || { echo "$1 modifiée en dernier par '${a:-?}' : elle doit être (re)validée par un commit 'Agent: dev' (§6.0)"; return 1; }
+  spec_dev "$1" "$2"
+}
+spec_dev() { # spec_dev <spec> <rev> : le contenu de la spec vu de <rev> vient d'un commit du dev ; un merge
+  local c a p                # sans résolution sur la spec combine ses parents : chacun doit l'être aussi
+  c="$(git log -1 --format=%H "$2" -- "$1")"
+  [ -n "$c" ] || { echo "$1 : aucun commit ne l'a créée ?"; return 1; }
+  if git rev-parse -q --verify "$c^2" >/dev/null && [ -z "$(git show --remerge-diff --format= "$c" -- "$1")" ]; then
+    for p in $(git rev-list --parents -n 1 "$c" | cut -d' ' -f2-); do
+      git cat-file -e "$p:$1" 2>/dev/null || continue
+      spec_dev "$1" "$p" || return 1
+    done
+    return 0
+  fi
+  a="$(git log -1 --format='x%(trailers:key=Agent,valueonly,separator=)' "$c" | tr -d ' ')"; a="${a#x}"
+  [ "$a" = dev ] || { echo "$1 modifiée en dernier par '${a:-?}' : elle doit être (re)validée par un commit 'Agent: dev' (§6.0)"; return 1; }
 }
 
 # a_du_contenu <F-id> <args git log>… : vrai si un commit de la feature touche autre chose que la
@@ -130,7 +143,7 @@ spec_validee() {
 a_du_contenu() {
   local fid="$1" c; shift
   for c in $(commits_feature "$fid" "$@"); do
-    [ -n "$(git diff-tree --no-commit-id --name-only -r --root "$c" -- . ':!specs' ':!ROADMAP.md' ':!MEMORY' ':!PROJECT_LOG.md')" ] && return 0
+    contenu_de "$c" | grep '^diff ' | grep -qv -e ' a/specs/' -e ' a/ROADMAP.md ' -e ' a/MEMORY/' -e ' a/PROJECT_LOG.md ' && return 0
   done
   return 1
 }

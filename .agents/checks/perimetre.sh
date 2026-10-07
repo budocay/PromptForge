@@ -107,9 +107,17 @@ case "${1:-}" in
       || echec "plage introuvable : $* (historique absent ? en CI, récupérer l'historique complet)"
     for c in $commits; do
       court="$(git log -1 --format=%h "$c")"
+      if git rev-parse -q --verify "$c^3" >/dev/null; then              # octopus : --remerge-diff ne sait pas
+        echo "Commit $court : merge à plus de deux parents refusé (fusionner une branche à la fois)" >&2; rc=2; continue
+      fi
       if git rev-parse -q --verify "$c^2" >/dev/null; then              # merge
         res="$(git show --remerge-diff --format= --name-only "$c" 2>/dev/null)" || echec "git ≥ 2.36 requis (--remerge-diff)"
         [ -n "$res" ] || continue                                        # fusion automatique : rien d'ajouté
+      fi
+      # exactement un « Agent: » et au plus un « Feature: » : les scripts lisent un trailer, pas une liste
+      if [ "$(git log -1 --format='%(trailers:key=Agent,valueonly)' "$c" | grep -c .)" -gt 1 ] \
+         || [ "$(git log -1 --format='%(trailers:key=Feature,valueonly)' "$c" | grep -c .)" -gt 1 ]; then
+        echo "Commit $court : plusieurs trailers 'Agent:' ou 'Feature:' (un seul de chaque)" >&2; rc=2; continue
       fi
       agent="$(git log -1 --format='%(trailers:key=Agent,valueonly)' "$c" | head -n 1 | tr -d '[:space:]')"
       [ -n "$agent" ] || { echo "Commit $court sans trailer 'Agent:'" >&2; rc=2; continue; }

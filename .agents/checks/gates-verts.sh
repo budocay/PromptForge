@@ -61,11 +61,11 @@ for fid in $(printf '%s\n' "$features" | tr -d ' ' | grep -v -x -e '' -e trivial
   [ $manque -eq 0 ] && echo "GATES $fid ($tier, $e) : OK (${requis% })"
 done
 # Pour la relecture humaine : code d'agent sans gate (« Feature: trivial »), dont le dev confirme le tier (§6.0)
-git log --no-merges --format='%H|%h|%(trailers:key=Agent,valueonly,separator=)|%(trailers:key=Feature,valueonly,separator=)' "$@" \
+git log --format='%H|%h|%(trailers:key=Agent,valueonly,separator=)|%(trailers:key=Feature,valueonly,separator=)' "$@" \
   | while IFS='|' read -r h hc ag fe; do
       ag="${ag// /}"; fe="${fe// /}"
       { [ "$fe" = trivial ] && [ "$ag" != dev ]; } || continue
-      f="$(git diff-tree --no-commit-id --name-only -r --root "$h" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md' | head -n 3 | tr '\n' ' ')"
+      f="$(contenu_de "$h" | sed -n 's%^diff --git a/\([^ ]*\) .*%\1%p' | head -n 3 | tr '\n' ' ')"
       [ -z "$f" ] || echo "TRIVIAL (sans gate, tier à confirmer par le dev à la relecture) : $hc $ag : $f"
     done
 [ $rc -eq 0 ] && echo "RESULTAT GATES: OK"
