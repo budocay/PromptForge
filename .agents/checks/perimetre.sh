@@ -131,6 +131,13 @@ case "${1:-}" in
       if [ -n "$fe" ] && ! printf '%s\n' "$fe" | grep -qxE "$FEATURE_RE"; then
         echo "Commit $court : trailer « Feature: $fe » invalide (F-<nombre> ou trivial)" >&2; rc=2; continue
       fi
+      if [ "$agent" != dev ]; then                                       # lien symbolique : le dev seul
+        if git rev-parse -q --verify "$c^2" >/dev/null; then raw="$(git show --remerge-diff --raw --no-renames --format= "$c")"
+        else raw="$(git diff-tree --no-commit-id --raw -r --root --no-renames "$c")"; fi
+        if printf '%s\n' "$raw" | awk '$2 == "120000"' | grep -q .; then
+          echo "Commit $court ($agent) : lien symbolique refusé (le dev seul en crée)" >&2; rc=2; continue
+        fi
+      fi
       while IFS= read -r f; do
         [ -n "$f" ] && signaler "$(statut "$agent" "$f")" "$f" "commit $court, $agent"
       done <<EOF

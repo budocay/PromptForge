@@ -113,13 +113,14 @@ EOF
     --src-prefix=a/ --dst-prefix=b/ -U3 -- "${l[@]}"
 }
 empreinte_de() { # empreinte_de <commit> : patch-id blancs compris (stable par rebase), plus la fonction englobante
-  local r                # de chaque bloc (patch-id ignore les lignes « @@ ») ; merge : condensé de sa résolution
-  r="$(contenu_de "$1")"; [ -n "$r" ] || return 0
+  # de chaque bloc (patch-id ignore les lignes « @@ ») ; merge : condensé de sa résolution. Toujours par tube :
+  # une substitution de commande perdrait les octets NUL.
+  [ -n "$(contenu_de "$1" | head -c 1 | od -An -c)" ] || return 0
   if git rev-parse -q --verify "$1^2" >/dev/null; then
-    printf 'fusion %s\n' "$(printf '%s\n' "$r" | git hash-object --stdin)"
+    printf 'fusion %s\n' "$(contenu_de "$1" | git hash-object --stdin)"
   else
-    printf '%s %s\n' "$(printf '%s\n' "$r" | git patch-id --verbatim | cut -d' ' -f1)" \
-      "$(printf '%s\n' "$r" | grep -E '^(@@|diff --git )' | sed 's/^@@[^@]*@@//' | git hash-object --stdin | cut -c1-12)"
+    printf '%s %s\n' "$(contenu_de "$1" | git patch-id --verbatim | cut -d' ' -f1)" \
+      "$(contenu_de "$1" | LC_ALL=C grep -aE '^(@@|diff --git )' | LC_ALL=C sed 's/^@@[^@]*@@//' | git hash-object --stdin | cut -c1-12)"
   fi
 }
 apres_feature() { # apres_feature "<commits F>" <args git log>… : « M <merge> » / « C <commit> » à compter en plus

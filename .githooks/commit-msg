@@ -16,6 +16,10 @@ feature="$(printf '%s\n' "$tr_" | grep -i '^feature:' | cut -d: -f2- | tr -d '[:
 [ "$agent" = dev ] || [ -n "$feature" ] || { echo "FAIL : trailer 'Feature: F-xxx' (ou 'Feature: trivial') manquant" >&2; exit 2; }
 [ -z "$feature" ] || printf '%s\n' "$feature" | grep -qxE 'F-[0-9]+|trivial' \
   || { echo "FAIL : trailer « Feature: $feature » invalide (F-<nombre> ou trivial)" >&2; exit 2; }
+# Un agent ne crée pas de lien symbolique : il ferait lire au code un fichier hors périmètre ou hors empreinte.
+if [ "$agent" != dev ] && git diff --cached --raw --no-renames | awk '$2 == "120000"' | grep -q .; then
+  echo "FAIL : lien symbolique refusé pour un agent (le dev seul en crée)" >&2; exit 2
+fi
 fichiers=()
 while IFS= read -r f; do [ -n "$f" ] && fichiers+=("$f"); done <<EOF
 $(git -c core.quotePath=false diff --cached --name-only --no-renames)
