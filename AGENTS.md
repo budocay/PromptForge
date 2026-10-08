@@ -28,4 +28,4 @@
 
 - `scripts/` ne peut pas toujours `import promptforge` (Python système < 3.10) : voir `scripts/core_loader.py`.
 - Les tests `integration` appellent un vrai service (Ollama, OSV.dev) : exclus des contrôles par `-m "not integration"`.
-- `.bandit-baseline.json` fige les 7 constats bandit existants (dette D-069) : le contrôle SAST ne signale que les nouveaux.
+- `.agents/outils/bandit-base.json` fige les 7 constats bandit existants (dette D-069) : le contrôle SAST (`bandit-garde.py`) ne signale que les nouveaux, comptés par (fichier, test), `# nosec` ignorés.

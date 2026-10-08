@@ -1,8 +1,10 @@
-# Protégés : « Agent: dev » uniquement — règles, contrôles, configuration (§0.2, §2.3, §3.9)
+# Protégés : « Agent: dev » uniquement — règles, contrôles, configuration des contrôles (§0.2, §2.3, §3.9)
+# Un fichier de configuration d'un formateur, d'un linter ou d'un analyseur est protégé où qu'il soit.
 AGENTS.md
 CLAUDE.md
 CODEOWNERS
 .gitignore
+.gitattributes
 LICENSE
 .agents/**
 .githooks/**
@@ -10,5 +12,16 @@ LICENSE
 .claude/**
 .gitleaks.toml
 .gitleaksignore
-.bandit-baseline.json
+.bandit
+ruff.toml
+.ruff.toml
+.flake8
+.pylintrc
+mypy.ini
+.semgrep*
 .importlinter
+pytest.ini
+.pytest.ini
+pytest.toml
+.pytest.toml
+.coveragerc

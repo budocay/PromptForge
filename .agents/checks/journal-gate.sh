@@ -12,7 +12,7 @@ if [ -f .agents/.state/dossier-courant ]; then
   [ -n "$emp" ] || { [ "$fid" = "$dfid" ] && emp="$demp"; }
 fi
 rapport="$(cat)"
-v="$(printf '%s\n' "$rapport" | grep -m1 -oE '[A-Z]+ GATE: (PASS|FAIL|UNVERIFIED)|APPROVED|CHANGES_REQUESTED|(INVALIDE|UNVERIFIED) \([^)]*\)')"
+v="$(printf '%s\n' "$rapport" | verdict_de "${1:-}")"
 if printf '%s' "$rapport" | grep -q 'NON INDÉPENDANTE' && [ "${CRITICITE:-prod}" = prod ]; then
   case "${1:-}" in agent-securite|agent-architecte) v="UNVERIFIED (NON INDÉPENDANTE, prod)" ;; esac
 fi

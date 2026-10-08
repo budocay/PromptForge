@@ -2,5 +2,5 @@
 PROJECT_LOG.md
 MEMORY/STATE.md
 MEMORY/INDEX.md
-MEMORY/features/**
+MEMORY/features/**/*.md
 MEMORY/gates.log

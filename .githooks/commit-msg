@@ -6,13 +6,23 @@
 C="$(git rev-parse --show-toplevel)/.agents/checks"
 # Merge : contrôlé au push et en CI sur ce que sa résolution ajoute à la fusion automatique (perimetre.sh).
 [ -f "$(git rev-parse --git-path MERGE_HEAD)" ] && exit 0
-agent="$(git interpret-trailers --parse "$1" | sed -n 's/^Agent: *//p' | head -n 1 | tr -d '[:space:]')"
+# Exactement un « Agent: » et au plus un « Feature: » (clés lues sans tenir compte de la casse, comme git log).
+tr_="$(git interpret-trailers --parse "$1")"
+[ "$(printf '%s\n' "$tr_" | grep -ci '^agent:')" -le 1 ] || { echo "FAIL : un seul trailer 'Agent:' par commit" >&2; exit 2; }
+[ "$(printf '%s\n' "$tr_" | grep -ci '^feature:')" -le 1 ] || { echo "FAIL : un seul trailer 'Feature:' par commit" >&2; exit 2; }
+agent="$(printf '%s\n' "$tr_" | grep -i '^agent:' | cut -d: -f2- | tr -d '[:space:]')"
 [ -n "$agent" ] || { echo "FAIL : trailer 'Agent: <id>' manquant (ou 'Agent: dev' pour un commit humain)" >&2; exit 2; }
-feature="$(git interpret-trailers --parse "$1" | sed -n 's/^Feature: *//p' | head -n 1 | tr -d '[:space:]')"
+feature="$(printf '%s\n' "$tr_" | grep -i '^feature:' | cut -d: -f2- | tr -d '[:space:]')"
 [ "$agent" = dev ] || [ -n "$feature" ] || { echo "FAIL : trailer 'Feature: F-xxx' (ou 'Feature: trivial') manquant" >&2; exit 2; }
+[ -z "$feature" ] || printf '%s\n' "$feature" | grep -qxE 'F-[0-9]+|trivial' \
+  || { echo "FAIL : trailer « Feature: $feature » invalide (F-<nombre> ou trivial)" >&2; exit 2; }
+# Un agent ne crée pas de lien symbolique : il ferait lire au code un fichier hors périmètre ou hors empreinte.
+if [ "$agent" != dev ] && git diff --cached --raw --no-renames | awk '$2 == "120000"' | grep -q .; then
+  echo "FAIL : lien symbolique refusé pour un agent (le dev seul en crée)" >&2; exit 2
+fi
 fichiers=()
 while IFS= read -r f; do [ -n "$f" ] && fichiers+=("$f"); done <<EOF
-$(git diff --cached --name-only --no-renames)
+$(git -c core.quotePath=false diff --cached --name-only --no-renames)
 EOF
 [ ${#fichiers[@]} -gt 0 ] || exit 0
 exec "$C/perimetre.sh" --fichiers "$agent" "${fichiers[@]}"

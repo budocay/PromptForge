@@ -1,6 +1,13 @@
 # shellcheck shell=bash
 # .agents/checks/lib.sh — sourcé par les scripts du socle. bash >= 3.2, aucune dépendance au harness.
 # Codes de sortie du socle : 0 OK · 2 FAIL (bloquant) · 3 ESCALADE (§5.6) · 4 UNVERIFIED (bloquant, outil absent)
+# Chemins non ASCII en clair dans toutes les sorties git du socle (sinon « src/\303\251t\303\251.py »).
+# Avant tout appel à git : un GIT_CONFIG_COUNT hérité invalide ferait échouer git lui-même.
+case "${GIT_CONFIG_COUNT:-0}" in *[!0-9]*|'') n_cfg=0 ;; *) n_cfg=$((10#${GIT_CONFIG_COUNT:-0})) ;; esac
+# Et jamais de détection de renommage : un fichier protégé « renommé » doit apparaître comme supprimé.
+export "GIT_CONFIG_KEY_$n_cfg=core.quotePath" "GIT_CONFIG_VALUE_$n_cfg=false"
+export "GIT_CONFIG_KEY_$((n_cfg + 1))=diff.renames" "GIT_CONFIG_VALUE_$((n_cfg + 1))=false"
+export GIT_CONFIG_COUNT=$((n_cfg + 2))
 RACINE="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "FAIL : pas un dépôt git" >&2; exit 2; }
 cd "$RACINE" || exit 2
 # La configuration vient UNIQUEMENT de .agents/outils.env (protégé) : on efface d'abord toute variable du
@@ -9,12 +16,23 @@ for v in $(compgen -v); do
   case "$v" in
     *_CMD|*_EXT|*_REQUIERT|*_RACINE|HARNESS|TOOLCHAINS|TESTS_GLOB|DEPS_AGE_MIN_JOURS|DEPS_APPROUVEES|CONTROLES_SUPPL|\
     CONTROLES_SECURITE|GATE_CRITIQUE_AGENTS|GATES_STANDARD|GATES_STRUCTUREL|PARTAGE_EXTERNE_AUTORISE|ACCEPTE_UNVERIFIED|\
-    ACCEPTE_UNVERIFIED_LOCAL|CRITICITE|BRANCHE_PRINCIPALE|FORMAT_LINT_EXCLUDE|CODEOWNER|BASE) unset "$v" 2>/dev/null ;;
+    ACCEPTE_UNVERIFIED_LOCAL|CRITICITE|BRANCHE_PRINCIPALE|FORMAT_LINT_EXCLUDE|CODEOWNER|PYTHON_SOCLE|CONFIG_PROTEGEE|BASE) unset "$v" 2>/dev/null ;;
   esac
 done
 [ -f .agents/outils.env ] || { echo "FAIL : .agents/outils.env absent" >&2; exit 2; }
 # shellcheck source=/dev/null
 set -a; . ./.agents/outils.env; set +a
+
+
+# Configuration des contrôles logée dans un fichier mixte (partagé) : clés réservées au dev, où que soit le
+# fichier (config-protegee.py). CONFIG_PROTEGEE dans outils.env remplace cette liste ; vide : aucune.
+# shellcheck disable=SC2034  # lue par perimetre.sh
+CONFIG_PROTEGEE_DEFAUT="pyproject.toml:tool.ruff pyproject.toml:tool.black pyproject.toml:tool.isort
+  pyproject.toml:tool.pytest pyproject.toml:tool.coverage pyproject.toml:tool.mypy pyproject.toml:tool.pylint
+  pyproject.toml:tool.pyright pyproject.toml:tool.bandit pyproject.toml:tool.importlinter
+  setup.cfg:flake8 setup.cfg:tool:pytest setup.cfg:mypy tox.ini:flake8 tox.ini:pytest
+  package.json:eslintConfig package.json:prettier package.json:jest package.json:stylelint
+  package.json:scripts.test package.json:scripts.lint package.json:scripts.format package.json:scripts.typecheck"
 
 echec()       { echo "FAIL : $*" >&2; exit 2; }
 non_verifie() { echo "UNVERIFIED : $*" >&2; exit 4; }
@@ -58,18 +76,108 @@ accepte() {
   return 0
 }
 
-# empreinte_feature <F-id> <args git log>… : empreinte du contenu des commits « Feature: <F-id> » (hors
-# traçabilité : MEMORY/, PROJECT_LOG.md, ROADMAP.md), stable par rebase. Un verdict vaut pour ce contenu-là.
-commits_feature() { # commits_feature <F-id> <args git log>… : commits « Feature: <F-id> » (hors merges)
+# empreinte_feature <F-id> <args git log>… : empreinte du contenu que les gates de <F-id> ont à juger, hors
+# traçabilité (MEMORY/, PROJECT_LOG.md, ROADMAP.md), stable par rebase. Y entrent : les commits « Feature:
+# <F-id> » ; et, parmi les commits de la plage qui DESCENDENT d'un de ces commits, la résolution de chaque
+# merge (quel que soit l'ordre des parents) et chaque commit d'agent sans feature ou « Feature: trivial »
+# (du code glissé après la revue). N'y entrent pas : les commits d'une autre feature (ses propres gates)
+# ni ceux du dev. Un verdict vaut pour ce contenu-là.
+# Valeur d'un trailer « Feature: » : F-<nombre> ou trivial, lue partout de la même façon (blancs retirés).
+# shellcheck disable=SC2034  # lue par perimetre.sh et gates-verts.sh
+FEATURE_RE='F-[0-9]+|trivial'
+valeurs_feature() { # valeurs_feature <args git log>… : valeurs « Feature: » de la plage, une par ligne
+  git log --format='%(trailers:key=Feature,valueonly)' "$@" | tr -d ' \t\r' | grep -v '^$' | sort -u
+}
+features_de() { # features_de <args git log>… : identifiants F-<nombre> de la plage (valeurs invalides écartées)
+  valeurs_feature "$@" | grep -xE 'F-[0-9]+'
+}
+commits_feature() { # commits_feature <F-id> <args git log>… : commits « Feature: <F-id> », merges compris
   local fid="$1"; shift
-  git log --no-merges --format='%H %(trailers:key=Feature,valueonly,separator=)' "$@" \
-    | awk -v f="$fid" '{gsub(/ /,"",$2)} $2==f {print $1}'
+  git log --format='%H %(trailers:key=Feature,valueonly,separator=)' "$@" \
+    | awk -v f="$fid" '{h = $1; $1 = ""; v = $0; gsub(/[ \t\r]/, "", v); if (v == f) print h}'
+}
+# Fichiers de traçabilité exacts (jamais un dossier qui porterait ce nom) et specs (specs/*.md : validées par
+# le dev, spec_validee) : hors empreinte. Une feature qui ne touche qu'eux n'est que de la planification.
+TRACE_RE='^(PROJECT_LOG\.md|ROADMAP\.md|MEMORY/gates\.log|MEMORY/.*\.md)$'
+PLANIF_RE='^specs/[^/]*\.md$'
+fichiers_de() { # fichiers_de <commit> : fichiers changés (merge : ceux que sa résolution change), un par ligne
+  if git rev-parse -q --verify "$1^2" >/dev/null; then
+    git show --remerge-diff --no-renames --format= --name-only "$1" | sort -u
+  else
+    git diff-tree --no-commit-id --no-renames --name-only -r --root "$1"
+  fi
+}
+# Diff au texte fixe, quelle que soit la configuration git du poste (préfixes, contexte, algorithme,
+# abréviations, style de conflit, pilotes externes) : la même empreinte en local et en CI.
+DIFF_FIXE=(-c core.attributesFile=/dev/null -c diff.orderFile=/dev/null -c diff.noprefix=false -c diff.mnemonicPrefix=false -c diff.context=3 -c diff.algorithm=myers
+           -c diff.indentHeuristic=true -c diff.suppressBlankEmpty=false -c diff.renames=false
+           -c merge.conflictStyle=merge -c core.abbrev=40)
+contenu_de() { # contenu_de <commit> : diff hors traçabilité (merge : ce que sa résolution ajoute à la fusion automatique)
+  local f l=()
+  while IFS= read -r f; do [ -n "$f" ] && l+=(":(literal)$f"); done <<EOF
+$(fichiers_de "$1" | grep -vE "$TRACE_RE" | grep -vE "$PLANIF_RE")
+EOF
+  [ ${#l[@]} -gt 0 ] || return 0                         # (specs : jugées par spec_validee, pas ici)
+  if git rev-parse -q --verify "$1^2" >/dev/null; then set -- --remerge-diff "$1"; fi
+  git "${DIFF_FIXE[@]}" show "$@" --format= --no-ext-diff --no-textconv --no-renames --text --full-index \
+    --src-prefix=a/ --dst-prefix=b/ -U3 -- "${l[@]}"
+}
+empreinte_de() { # empreinte_de <commit> : patch-id blancs compris (stable par rebase), plus la fonction englobante
+  # de chaque bloc (patch-id ignore les lignes « @@ ») ; merge : condensé de sa résolution. Toujours par tube :
+  # une substitution de commande perdrait les octets NUL.
+  [ -n "$(contenu_de "$1" | head -c 1 | od -An -c)" ] || return 0
+  if git rev-parse -q --verify "$1^2" >/dev/null; then
+    printf 'fusion %s\n' "$(contenu_de "$1" | git hash-object --stdin)"
+  else
+    printf '%s %s\n' "$(contenu_de "$1" | git patch-id --verbatim | cut -d' ' -f1)" \
+      "$(contenu_de "$1" | LC_ALL=C grep -aE '^(@@|diff --git )' | LC_ALL=C sed 's/^@@[^@]*@@//' | git hash-object --stdin | cut -c1-12)"
+  fi
+}
+apres_feature() { # apres_feature "<commits F>" <args git log>… : « M <merge> » / « C <commit> » à compter en plus
+  local cs="$1"; shift
+  git log --format='%H|%P|%(trailers:key=Agent,valueonly,separator=)|%(trailers:key=Feature,valueonly,separator=)' "$@" \
+    | awk -F'|' -v s="$cs" '
+      BEGIN { n = split(s, a, " "); for (i = 1; i <= n; i++) if (a[i] != "") F[a[i]] = 1 }
+      { h = $1; np = split($2, p, " "); nb[h] = np; ag = $3; fe = $4; gsub(/[ \t]/, "", ag); gsub(/[ \t]/, "", fe)
+        A[h] = ag; E[h] = fe; ord[++k] = h
+        for (j = 1; j <= np; j++) kids[p[j]] = kids[p[j]] " " h }
+      END { for (f in F) { q[++t] = f; vu[f] = 1 }
+            for (hd = 1; hd <= t; hd++) { m = split(kids[q[hd]], x, " ")
+              for (j = 1; j <= m; j++) if (!(x[j] in vu)) { vu[x[j]] = 1; q[++t] = x[j] } }
+            for (i = 1; i <= k; i++) { h = ord[i]; if (!(h in vu) || (h in F)) continue
+              if (nb[h] > 1) print "M " h
+              else if (A[h] != "dev" && (E[h] == "" || E[h] == "trivial")) print "C " h } }'
 }
 empreinte_feature() {
-  local fid="$1" c; shift
-  for c in $(commits_feature "$fid" "$@"); do
-    git show --format= "$c" -- . ':!MEMORY' ':!PROJECT_LOG.md' ':!ROADMAP.md' | git patch-id --stable | cut -d' ' -f1
-  done | sort | git hash-object --stdin | cut -c1-12
+  local fid="$1" cs c; shift
+  cs="$(commits_feature "$fid" "$@" | tr '\n' ' ')"
+  {
+    for c in $cs; do empreinte_de "$c"; done
+    [ -z "$cs" ] || apres_feature "$cs" "$@" | while read -r _ c; do empreinte_de "$c"; done
+  } | sort | git hash-object --stdin | cut -c1-12
+}
+
+# spec_validee <spec> <rev> : la spec, à la révision <rev>, porte « Statut : validée » et le DERNIER commit
+# qui en a changé le contenu est un commit du dev (validation ou revalidation, §6.0) ; un merge compte
+# seulement si sa résolution touche la spec. Sinon : raison sur stdout, code 1.
+spec_validee() {
+  git show "$2:$1" 2>/dev/null | grep -q '^Statut : validée' \
+    || { echo "$1 n'est pas validée (ligne « Statut : validée » attendue, §6.0)"; return 1; }
+  spec_dev "$1" "$2"
+}
+spec_dev() { # spec_dev <spec> <rev> : le contenu de la spec vu de <rev> vient d'un commit du dev ; un merge
+  local c a p                # sans résolution sur la spec combine ses parents : chacun doit l'être aussi
+  c="$(git log -1 --format=%H "$2" -- "$1")"
+  [ -n "$c" ] || { echo "$1 : aucun commit ne l'a créée ?"; return 1; }
+  if git rev-parse -q --verify "$c^2" >/dev/null && [ -z "$(git show --remerge-diff --format= "$c" -- "$1")" ]; then
+    for p in $(git rev-list --parents -n 1 "$c" | cut -d' ' -f2-); do
+      git cat-file -e "$p:$1" 2>/dev/null || continue
+      spec_dev "$1" "$p" || return 1
+    done
+    return 0
+  fi
+  a="$(git log -1 --format='x%(trailers:key=Agent,valueonly,separator=)' "$c" | tr -d ' ')"; a="${a#x}"
+  [ "$a" = dev ] || { echo "$1 modifiée en dernier par '${a:-?}' : elle doit être (re)validée par un commit 'Agent: dev' (§6.0)"; return 1; }
 }
 
 # a_du_contenu <F-id> <args git log>… : vrai si un commit de la feature touche autre chose que la
@@ -78,9 +186,68 @@ empreinte_feature() {
 a_du_contenu() {
   local fid="$1" c; shift
   for c in $(commits_feature "$fid" "$@"); do
-    [ -n "$(git diff-tree --no-commit-id --name-only -r --root "$c" -- . ':!specs' ':!ROADMAP.md' ':!MEMORY' ':!PROJECT_LOG.md')" ] && return 0
+    fichiers_de "$c" | grep -vE "$TRACE_RE" | grep -qvE "$PLANIF_RE" && return 0
   done
   return 1
+}
+
+# verdict_de <agent> < rapport : verdict lu sur la PREMIÈRE ligne non vide du rapport, au type de CET
+# agent (route A et route B) ; rien d'autre ne compte, même un verdict cité plus loin. Les mentions du
+# socle « INVALIDE (…) » et « UNVERIFIED (…) » passent telles quelles. Un gabarit recopié tel quel
+# (« PASS | FAIL », « PASS / FAIL ») n'est pas un verdict. Type d'un gate : SECURITY, ARCHITECTURE, CRAFT
+# pour les trois du socle ; sinon le nom de l'agent sans « agent- » (agent-perf => « PERF GATE: »).
+# Sinon : vide (=> UNVERIFIED).
+verdict_de() {
+  local l v t
+  l="$(grep -m1 -v '^[[:space:]]*$' | sed 's/^[#*[:space:]]*//; s/[*[:space:]]*$//')"
+  v="$(printf '%s\n' "$l" | grep -oE '^(INVALIDE|UNVERIFIED) \(.*\)')"
+  [ -n "$v" ] && { printf '%s\n' "$v"; return; }
+  printf '%s\n' "$l" | grep -qE '(PASS|FAIL|UNVERIFIED|APPROVED|CHANGES_REQUESTED)[[:space:]]*[|/]' && { echo; return; }
+  case "$1" in
+    reviewer-*)       v="$(printf '%s\n' "$l" | grep -oE '^(APPROVED|CHANGES_REQUESTED|UNVERIFIED)([^A-Za-z_]|$)' | grep -oE '^[A-Z_]+')"
+                      [ "$v" = UNVERIFIED ] && v="UNVERIFIED (contexte insuffisant pour le reviewer)"
+                      printf '%s\n' "$v"; return ;;
+    agent-securite)   t=SECURITY ;;
+    agent-architecte) t=ARCHITECTURE ;;
+    agent-craft)      t=CRAFT ;;
+    *)                t="$(printf '%s' "${1#agent-}" | tr 'a-z-' 'A-Z_')" ;;
+  esac
+  printf '%s\n' "$l" | grep -oE "^$t GATE: (PASS|FAIL|UNVERIFIED)([^A-Za-z_]|\$)" | grep -oE "^$t GATE: [A-Z]+"
+}
+
+# serie_rejets <gate> <F-id> <journal> <rev> : « <n> <p> » ; lignes prises dans l'ordre de leur date (une
+# ligne déplacée ou recopiée garde sa place) ; n = rejets consécutifs en fin de journal pour ce
+# gate et cette feature (une ligne REPRISE ajoutée par un commit « Agent: dev » visible depuis <rev> remet à
+# zéro) ; p = 1 si le dernier verdict est un PASS/APPROVED obtenu après 3 rejets sans REPRISE (§5.6).
+serie_rejets() {
+  local n=0 p=0 l v a
+  while IFS= read -r l; do
+    [ -n "$l" ] || continue
+    v="$(printf '%s\n' "$l" | awk -F' [|] ' '{print $4}')"
+    case "$v" in
+      *"GATE: FAIL"|CHANGES_REQUESTED) n=$((n + 1)); p=0 ;;
+      *PASS|APPROVED) if [ $n -ge 3 ]; then p=1; else n=0; p=0; fi ;;
+      REPRISE*) a="$(git log -1 --format='x%(trailers:key=Agent,valueonly,separator=)' "$4" -S"$l" -- MEMORY/gates.log | tr -d ' ')"
+                [ "${a#x}" = dev ] && { n=0; p=0; } ;;
+    esac
+  done <<EOF
+$(printf '%s\n' "$3" | grep -F " | $1 | $2 | " | sort -s -t'|' -k1,1)
+EOF
+  echo "$n $p"
+}
+
+# motif_valide <ligne> : ligne d'une liste de périmètre que le socle ET CODEOWNERS lisent de la même façon.
+# Refusés : espaces, « ! », crochets, « \ », commentaire en fin de ligne, « / » seul, et « ** » qui n'est pas
+# un segment entier (« src/**.py » vaut « src/*.py » pour git et GitHub : ambigu).
+motif_valide() {
+  local m
+  case "$1" in
+    *[[:space:]]*|'!'*|*'['*|*\\*|?*'#'*|/) return 1 ;;
+  esac
+  m="/$1/"
+  while case "$m" in */\*\*/*) true ;; *) false ;; esac; do m="${m//\/\*\*\//\/}"; done
+  case "$m" in *'**'*) return 1 ;; esac
+  return 0
 }
 
 # filtre_ext "ext1 ext2" fichier… : garde les fichiers existants dont l'extension est listée (liste vide = tout)
