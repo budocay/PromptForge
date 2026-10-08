@@ -5,13 +5,17 @@ C="$(git rev-parse --show-toplevel)/.agents/checks"
 zero=0000000000000000000000000000000000000000
 while read -r _ local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$zero" ] && continue                          # suppression de branche
-  if [ "$remote_sha" = "$zero" ]; then plage="$local_sha --not --remotes"
+  if [ "$remote_sha" = "$zero" ]; then plage="$local_sha --not --remotes"; plage_agents="$plage"
+    if [ -z "$(git for-each-ref --count=1 refs/remotes)" ]; then           # premier push vers un distant vide :
+      inst="$(git log --diff-filter=A --format=%H "$local_sha" -- .agents/outils.env | tail -n 1)"   # l'installation
+      [ -z "$inst" ] || plage_agents="--no-walk $inst $(git rev-list --ancestry-path "$inst..$local_sha" | tr '\n' ' ')"
+    fi
   else
     git cat-file -e "$remote_sha^{commit}" 2>/dev/null || { echo "FAIL : $remote_sha inconnu localement (git fetch)" >&2; exit 2; }
-    plage="$remote_sha..$local_sha"
+    plage="$remote_sha..$local_sha"; plage_agents="$plage"
   fi
   # shellcheck disable=SC2086  # $plage est volontairement découpée en arguments git
-  "$C/perimetre.sh" --commits $plage </dev/null           || exit 2
+  "$C/perimetre.sh" --commits $plage_agents </dev/null    || exit 2
   # shellcheck disable=SC2086
   "$C/secrets.sh" --plage $plage </dev/null               || exit 2
   "$C/verifier.sh" --cle push --ref "$local_sha" </dev/null || exit 2

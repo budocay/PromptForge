@@ -22,10 +22,13 @@ features_de "$base..HEAD" | grep -qx -- "$fid" \
   || echec "aucun commit 'Feature: $fid' depuis $cible (travailler sur une branche de feature) : rien à revoir"
 d=".agents/review/$fid"; rm -rf "$d"; mkdir -p "$d" .agents/.state
 cp "$spec" "$d/spec.md"
-# Diff montré aux gates : en texte (un octet NUL ne cache pas du code). Seuls sont résumés : un fichier
-# nommé exactement .env ou .env.<x> qui n'est pas du code (secrets présumés), et un binaire de média ou
-# d'archive DONT LA SIGNATURE est celle d'un média ; de ce dernier, les suites de 8 caractères imprimables
-# sont quand même montrées (un fichier polyglotte, image et code à la fois, laisse voir son code) (§3.0).
+# Diff montré aux gates : en texte (un octet NUL ne cache pas du code). Deux exceptions (§3.0) :
+# - un fichier nommé exactement .env ou .env.<x> qui n'est pas du code : montré en entier, valeurs des clés
+#   sensibles masquées (un segment KEY, SECRET, TOKEN, PASS, PASSWORD, PWD, CREDENTIALS, PRIVATE, APIKEY ou
+#   DSN dans le nom de la clé ; identifiants dans une URL « ://u:p@ ») ;
+# - un binaire de média ou d'archive dont la signature est celle d'un média ET dont au moins 30 % des octets
+#   ne sont pas du texte : résumé, ses suites de 6 caractères imprimables ou blancs montrées (4 Kio au plus :
+#   un polyglotte laisse voir son code, une police ou un PDF ne sature pas le dossier).
 BIN_EXT='png|jpe?g|gif|webp|ico|bmp|pdf|woff2?|ttf|otf|zip|gz|tgz|jar|mp3|mp4|webm|ogg|flac|wav'
 CODE_EXT=" js mjs cjs ts tsx jsx mts cts vue svelte py sh bash rb php go java kt kts dart rs swift c cc cpp h cs ${LINT_EXT:-} ${FORMAT_EXT:-} "
 media() { # media <chemin> : vrai si les premiers octets de HEAD:<chemin> sont une signature de média ou d'archive
@@ -42,16 +45,27 @@ while IFS="$(printf '\t')" read -r ajout _ f; do
   b="${f##*/}"
   case "$b" in
     .env|.env.*) case "$CODE_EXT" in *" ${b##*.} "*) ;; *)
-        retire+=(":(exclude,literal)$f"); entete="$entete# NON MONTRÉ (.env, secrets présumés) : $f"$'\n'; continue ;; esac ;;
+        retire+=(":(exclude,literal)$f"); entete="$entete# MONTRÉ EN FIN DE DIFF, VALEURS SENSIBLES MASQUÉES (.env) : $f"$'\n'
+        extraits="$extraits# CONTENU DE $f (valeurs des clés sensibles masquées) :"$'\n'"$(git cat-file -p "HEAD:$f" 2>/dev/null \
+          | awk '{ u = toupper($0)
+                   if (match(u, /^[ \t]*(EXPORT[ \t]+)?([A-Z0-9.]*_)*(KEY|SECRET|TOKEN|PASS|PASSWORD|PASSWD|PWD|CREDENTIALS?|PRIVATE|APIKEY|DSN)(_[A-Z0-9.]*)*[ \t]*[=:]/))
+                     { print substr($0, 1, RLENGTH) "***"; next }
+                   gsub(/:\/\/[^\/@ ]*:[^\/@ ]*@/, "://***@"); print }')"$'\n'
+        continue ;; esac ;;
   esac
   { [ "$ajout" = - ] && printf '%s\n' "$f" | grep -qiE "\.($BIN_EXT)\$"; } || continue
   if ! git cat-file -e "HEAD:$f" 2>/dev/null; then                     # binaire supprimé
     retire+=(":(exclude,literal)$f"); entete="$entete# NON MONTRÉ (binaire supprimé) : $f"$'\n'; continue
   fi
   media "$f" || continue
+  taille="$(git cat-file -s "HEAD:$f")"
+  autres="$(git cat-file -p "HEAD:$f" | LC_ALL=C tr -d '\t\n\r\040-\176' | wc -c | tr -d ' ')"
+  [ $((autres * 100)) -ge $((taille * 30)) ] || continue               # surtout du texte : montré en entier
   retire+=(":(exclude,literal)$f")
-  entete="$entete# NON MONTRÉ (média ou archive, $(git cat-file -s "HEAD:$f") octets ; texte lisible en fin de diff) : $f"$'\n'
-  extraits="$extraits# TEXTE LISIBLE DE $f :"$'\n'"$(git cat-file -p "HEAD:$f" | LC_ALL=C grep -aoE '[[:print:]]{8,}')"$'\n'
+  entete="$entete# NON MONTRÉ (média ou archive, $taille octets ; texte lisible en fin de diff) : $f"$'\n'
+  lisible="$(git cat-file -p "HEAD:$f" | LC_ALL=C tr '\000' '\n' | LC_ALL=C grep -aoE '[[:print:][:space:]]{6,}')"
+  extraits="$extraits# TEXTE LISIBLE DE $f :"$'\n'"$(printf '%s' "$lisible" | head -c 4096)"$'\n'
+  [ "${#lisible}" -le 4096 ] || extraits="$extraits# TEXTE LISIBLE TRONQUÉ à 4 Kio sur ${#lisible} : un code qui charge ce fichier est un FAIL (§3.0)"$'\n'
 done <<EOF
 $(git diff --numstat --no-renames "$base" HEAD)
 EOF

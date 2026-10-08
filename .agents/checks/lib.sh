@@ -16,13 +16,23 @@ for v in $(compgen -v); do
   case "$v" in
     *_CMD|*_EXT|*_REQUIERT|*_RACINE|HARNESS|TOOLCHAINS|TESTS_GLOB|DEPS_AGE_MIN_JOURS|DEPS_APPROUVEES|CONTROLES_SUPPL|\
     CONTROLES_SECURITE|GATE_CRITIQUE_AGENTS|GATES_STANDARD|GATES_STRUCTUREL|PARTAGE_EXTERNE_AUTORISE|ACCEPTE_UNVERIFIED|\
-    ACCEPTE_UNVERIFIED_LOCAL|CRITICITE|BRANCHE_PRINCIPALE|FORMAT_LINT_EXCLUDE|CODEOWNER|PYTHON_SOCLE|BASE) unset "$v" 2>/dev/null ;;
+    ACCEPTE_UNVERIFIED_LOCAL|CRITICITE|BRANCHE_PRINCIPALE|FORMAT_LINT_EXCLUDE|CODEOWNER|PYTHON_SOCLE|CONFIG_PROTEGEE|BASE) unset "$v" 2>/dev/null ;;
   esac
 done
 [ -f .agents/outils.env ] || { echo "FAIL : .agents/outils.env absent" >&2; exit 2; }
 # shellcheck source=/dev/null
 set -a; . ./.agents/outils.env; set +a
 
+
+# Configuration des contrôles logée dans un fichier mixte (partagé) : clés réservées au dev, où que soit le
+# fichier (config-protegee.py). CONFIG_PROTEGEE dans outils.env remplace cette liste ; vide : aucune.
+# shellcheck disable=SC2034  # lue par perimetre.sh
+CONFIG_PROTEGEE_DEFAUT="pyproject.toml:tool.ruff pyproject.toml:tool.black pyproject.toml:tool.isort
+  pyproject.toml:tool.pytest pyproject.toml:tool.coverage pyproject.toml:tool.mypy pyproject.toml:tool.pylint
+  pyproject.toml:tool.pyright pyproject.toml:tool.bandit pyproject.toml:tool.importlinter
+  setup.cfg:flake8 setup.cfg:tool:pytest setup.cfg:mypy tox.ini:flake8 tox.ini:pytest
+  package.json:eslintConfig package.json:prettier package.json:jest package.json:stylelint
+  package.json:scripts.test package.json:scripts.lint package.json:scripts.format package.json:scripts.typecheck"
 
 echec()       { echo "FAIL : $*" >&2; exit 2; }
 non_verifie() { echo "UNVERIFIED : $*" >&2; exit 4; }
@@ -86,8 +96,8 @@ commits_feature() { # commits_feature <F-id> <args git log>… : commits « Feat
   git log --format='%H %(trailers:key=Feature,valueonly,separator=)' "$@" \
     | awk -v f="$fid" '{h = $1; $1 = ""; v = $0; gsub(/[ \t\r]/, "", v); if (v == f) print h}'
 }
-# Fichiers de traçabilité exacts (jamais un dossier qui porterait ce nom) : hors empreinte. Les specs, en
-# plus, ne font pas d'une feature autre chose que de la planification.
+# Fichiers de traçabilité exacts (jamais un dossier qui porterait ce nom) et specs (specs/*.md : validées par
+# le dev, spec_validee) : hors empreinte. Une feature qui ne touche qu'eux n'est que de la planification.
 TRACE_RE='^(PROJECT_LOG\.md|ROADMAP\.md|MEMORY/gates\.log|MEMORY/.*\.md)$'
 PLANIF_RE='^specs/[^/]*\.md$'
 fichiers_de() { # fichiers_de <commit> : fichiers changés (merge : ceux que sa résolution change), un par ligne
@@ -105,9 +115,9 @@ DIFF_FIXE=(-c core.attributesFile=/dev/null -c diff.orderFile=/dev/null -c diff.
 contenu_de() { # contenu_de <commit> : diff hors traçabilité (merge : ce que sa résolution ajoute à la fusion automatique)
   local f l=()
   while IFS= read -r f; do [ -n "$f" ] && l+=(":(literal)$f"); done <<EOF
-$(fichiers_de "$1" | grep -vE "$TRACE_RE")
+$(fichiers_de "$1" | grep -vE "$TRACE_RE" | grep -vE "$PLANIF_RE")
 EOF
-  [ ${#l[@]} -gt 0 ] || return 0
+  [ ${#l[@]} -gt 0 ] || return 0                         # (specs : jugées par spec_validee, pas ici)
   if git rev-parse -q --verify "$1^2" >/dev/null; then set -- --remerge-diff "$1"; fi
   git "${DIFF_FIXE[@]}" show "$@" --format= --no-ext-diff --no-textconv --no-renames --text --full-index \
     --src-prefix=a/ --dst-prefix=b/ -U3 -- "${l[@]}"
@@ -203,6 +213,27 @@ verdict_de() {
     *)                t="$(printf '%s' "${1#agent-}" | tr 'a-z-' 'A-Z_')" ;;
   esac
   printf '%s\n' "$l" | grep -oE "^$t GATE: (PASS|FAIL|UNVERIFIED)([^A-Za-z_]|\$)" | grep -oE "^$t GATE: [A-Z]+"
+}
+
+# serie_rejets <gate> <F-id> <journal> <rev> : « <n> <p> » ; lignes prises dans l'ordre de leur date (une
+# ligne déplacée ou recopiée garde sa place) ; n = rejets consécutifs en fin de journal pour ce
+# gate et cette feature (une ligne REPRISE ajoutée par un commit « Agent: dev » visible depuis <rev> remet à
+# zéro) ; p = 1 si le dernier verdict est un PASS/APPROVED obtenu après 3 rejets sans REPRISE (§5.6).
+serie_rejets() {
+  local n=0 p=0 l v a
+  while IFS= read -r l; do
+    [ -n "$l" ] || continue
+    v="$(printf '%s\n' "$l" | awk -F' [|] ' '{print $4}')"
+    case "$v" in
+      *"GATE: FAIL"|CHANGES_REQUESTED) n=$((n + 1)); p=0 ;;
+      *PASS|APPROVED) if [ $n -ge 3 ]; then p=1; else n=0; p=0; fi ;;
+      REPRISE*) a="$(git log -1 --format='x%(trailers:key=Agent,valueonly,separator=)' "$4" -S"$l" -- MEMORY/gates.log | tr -d ' ')"
+                [ "${a#x}" = dev ] && { n=0; p=0; } ;;
+    esac
+  done <<EOF
+$(printf '%s\n' "$3" | grep -F " | $1 | $2 | " | sort -s -t'|' -k1,1)
+EOF
+  echo "$n $p"
 }
 
 # motif_valide <ligne> : ligne d'une liste de périmètre que le socle ET CODEOWNERS lisent de la même façon.

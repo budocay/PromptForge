@@ -52,11 +52,15 @@ for fid in $(features_de "$@"); do
   fi
   e="$(empreinte_feature "$fid" "$@")"; manque=0
   for g in $requis; do
-    ligne="$(printf '%s\n' "$journal" | grep -F " | $g | $fid | " | tail -n 1)"
+    ligne="$(printf '%s\n' "$journal" | grep -F " | $g | $fid | " | sort -s -t'|' -k1,1 | tail -n 1)"   # le plus récent par date
     v="$(printf '%s' "$ligne" | awk -F' [|] ' '{print $4}')"; ve="$(printf '%s' "$ligne" | awk -F' [|] ' '{print $5}')"
     if [ -z "$ligne" ]; then ko "MANQUANT $fid : aucun verdict de $g (dossier-revue.sh $fid puis gate) [empreinte actuelle $e]"; manque=1; continue; fi
     case "$v" in
-      *PASS|APPROVED) ;;
+      *PASS|APPROVED)
+        read -r _ apres_escalade <<EOF
+$(serie_rejets "$g" "$fid" "$journal" "$rev")
+EOF
+        [ "${apres_escalade:-0}" -eq 0 ] || { ko "NON VERT $fid : $g a rendu $v après 3 rejets sans REPRISE du dev (§5.6)"; manque=1; continue; } ;;
       DEROGATION*)
         a="$(git log -1 --format='x%(trailers:key=Agent,valueonly,separator=)' "$rev" -S"$ligne" -- "$J" | tr -d ' ')"
         [ "${a#x}" = dev ] || { ko "FAIL $fid : dérogation de $g non ajoutée par un commit 'Agent: dev'"; manque=1; continue; } ;;

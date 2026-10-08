@@ -20,6 +20,11 @@ case "$(tail -n 1 "$d/checks.txt")" in
   *) echec "contrôles déterministes en échec : pas de revue LLM (§6.1)" ;;
 esac
 def=".agents/agents/$agent.md"; [ -f "$def" ] || echec "définition absente : $def"
+# Plafond §5.6 : après 3 rejets consécutifs, plus de passe tant que le dev n'a pas commité une ligne REPRISE.
+read -r serie _ <<EOF
+$(serie_rejets "$agent" "$fid" "$(cat MEMORY/gates.log 2>/dev/null)" HEAD)
+EOF
+[ "${serie:-0}" -lt 3 ] || { echo "ESCALADE (§5.6) : $agent a rejeté $fid 3 fois de suite ; reprise par le dev seulement (ligne REPRISE, commit Agent: dev)." >&2; exit 3; }
 
 cmd="${GATE_CMD:-}"
 case " ${GATE_CRITIQUE_AGENTS:-} " in *" $agent "*)
@@ -50,8 +55,10 @@ echo "$agent $fid : ${v:-verdict absent} ($d/$agent.md)"
 case "$v" in
   *PASS|APPROVED) exit 0 ;;
   *FAIL|CHANGES_REQUESTED)
-    n="$(grep -F " | $agent | $fid | " MEMORY/gates.log | tail -n 3 | grep -c -E 'GATE: FAIL|CHANGES_REQUESTED')"
-    [ "$n" -ge 3 ] && { echo "ESCALADE (§5.6) : $agent a rejeté $fid 3 fois de suite." >&2; exit 3; }
+    read -r serie _ <<EOF
+$(serie_rejets "$agent" "$fid" "$(cat MEMORY/gates.log)" HEAD)
+EOF
+    [ "${serie:-0}" -ge 3 ] && { echo "ESCALADE (§5.6) : $agent a rejeté $fid 3 fois de suite." >&2; exit 3; }
     exit 2 ;;
   *) exit 4 ;;
 esac

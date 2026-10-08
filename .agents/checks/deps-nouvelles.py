@@ -38,12 +38,13 @@ def nom_pep508(req):
 def py_deps(txt):
     if not txt: return set()
     d = tomllib.loads(txt); p = d.get("project", {})
+    soi = nom_pep508(p.get("name", "")) if p.get("name") else None     # extra auto-référent : « projet[web] »
     reqs = list(p.get("dependencies", []))
     for v in p.get("optional-dependencies", {}).values(): reqs += v
     for v in d.get("dependency-groups", {}).values(): reqs += [x for x in v if isinstance(x, str)]
     outil = d.get("tool", {})
     reqs += [x for x in outil.get("uv", {}).get("dev-dependencies", []) if isinstance(x, str)]
-    noms = {nom_pep508(r) for r in reqs if r.strip()}
+    noms = {nom_pep508(r) for r in reqs if r.strip()} - {soi}
     poetry = outil.get("poetry", {})                                    # Poetry : tables nom = contrainte
     tables = [poetry.get("dependencies", {}), poetry.get("dev-dependencies", {})]
     tables += [g.get("dependencies", {}) for g in poetry.get("group", {}).values()]

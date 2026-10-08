@@ -19,12 +19,16 @@ ruff.toml @budocay
 mypy.ini @budocay
 .semgrep* @budocay
 .importlinter @budocay
+pytest.ini @budocay
+.pytest.ini @budocay
+pytest.toml @budocay
+.pytest.toml @budocay
+.coveragerc @budocay
 pyproject.toml @budocay
 README.md @budocay
 CONTRIBUTING.md @budocay
 docs/SOURCES_METHODOLOGY.md @budocay
 conftest.py @budocay
-pytest.ini @budocay
 tox.ini @budocay
 setup.cfg @budocay
 tests/__init__.py @budocay

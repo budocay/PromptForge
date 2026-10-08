@@ -88,6 +88,14 @@ statut() { # statut <agent> <fichier> -> OK | PARTAGE | HORS | PROTEGE   (ordre 
 }
 
 rc=0
+CFG="${CONFIG_PROTEGEE-$CONFIG_PROTEGEE_DEFAUT}"; MIXTES=" "
+for s in $CFG; do MIXTES="$MIXTES${s%%:*} "; done
+config_ok() { # config_ok <avant> <apres> <fichier> [<avant2>] : clés protégées d'un fichier mixte inchangées
+  case "$MIXTES" in *" ${3##*/} "*) ;; *) return 0 ;; esac
+  command -v "${PYTHON_SOCLE:-python3}" >/dev/null 2>&1 \
+    || { echo "PROTEGE : $3 : configuration protégée invérifiable (PYTHON_SOCLE introuvable)" >&2; return 1; }
+  CONFIG_PROTEGEE="$CFG" "${PYTHON_SOCLE:-python3}" "$(dirname "$0")/config-protegee.py" "$@" </dev/null
+}
 signaler() { # signaler <statut> <fichier> <contexte>
   case "$1" in
     HORS|PROTEGE) echo "$1 : $2 ($3)" >&2; rc=2 ;;
@@ -102,6 +110,7 @@ case "${1:-}" in
     for f in "$@"; do
       f="$(relatif "$f")"; [ "$f" = ".." ] && echec "chemin contenant '..' refusé"
       signaler "$(statut "$agent" "$f")" "$f" "$agent"
+      if [ "$agent" != dev ]; then config_ok HEAD : "$f" || rc=2; fi    # contenu indexé (commit-msg)
     done ;;
   --commits)
     shift
@@ -138,8 +147,15 @@ case "${1:-}" in
           echo "Commit $court ($agent) : lien symbolique refusé (le dev seul en crée)" >&2; rc=2; continue
         fi
       fi
+      avant="$(git rev-parse -q --verify "$c^" || git hash-object -t tree /dev/null)"
+      p2="$(git rev-parse -q --verify "$c^2")"; base=""
+      [ -z "$p2" ] || base="$(git merge-base --all "$c^1" "$c^2" 2>/dev/null | paste -sd, -)"
+      [ -n "$p2" ] && [ -z "$base" ] && base="$(git hash-object -t tree /dev/null)"   # branches sans ancêtre commun
       while IFS= read -r f; do
-        [ -n "$f" ] && signaler "$(statut "$agent" "$f")" "$f" "commit $court, $agent"
+        [ -n "$f" ] || continue
+        signaler "$(statut "$agent" "$f")" "$f" "commit $court, $agent"
+        # shellcheck disable=SC2086  # $p2 et $base vides hors merge
+        if [ "$agent" != dev ]; then config_ok "$avant" "$c" "$f" $p2 $base || rc=2; fi
       done <<EOF
 $(if git rev-parse -q --verify "$c^2" >/dev/null; then printf '%s\n' "$res"; else git diff-tree --no-commit-id --no-renames --name-only -r --root "$c"; fi)
 EOF

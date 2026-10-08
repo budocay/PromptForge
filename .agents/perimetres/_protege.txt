@@ -20,3 +20,8 @@ ruff.toml
 mypy.ini
 .semgrep*
 .importlinter
+pytest.ini
+.pytest.ini
+pytest.toml
+.pytest.toml
+.coveragerc
